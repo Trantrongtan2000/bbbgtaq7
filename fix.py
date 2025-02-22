@@ -110,7 +110,7 @@ if file_name is not None:  # Kiểm tra xem người dùng đã chọn file chư
                     break
             shd=clean_filename(data['shd'])
             output_filename = f"{data['cty']}_{shd}.docx"
-            document.save(output_filename))
+            document.save(output_filename)
             with open(output_filename, "rb") as file:
                     file_bytes = file.read()
 
