@@ -5,7 +5,7 @@ from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Pt  # For font size
 from docx.enum.style import WD_STYLE_TYPE
-
+import tempfile
 from io import BytesIO
 
 import json
@@ -26,14 +26,19 @@ genai.configure(api_key=GOOGLE_API_KEY)
 model_name=['gemini-2.0-flash',"gemini-2.0-pro-exp-02-05","gemini-1.5-pro"]
 
 file_name = st.file_uploader("Chọn file PDF", type="pdf")
-
-
+print(file_name)
+print(type(file_name))
 
 if file_name is not None:  # Kiểm tra xem người dùng đã chọn file chưa
     try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file_name.name.split('.')[-1]}") as temp_file:  # Create temp file
+            temp_file.write(file_name.getvalue())  # Write the file content
+            temp_file_path = temp_file.name  # Get the temporary file path
+            print(temp_file_path)
         with st.spinner("Đang xử lý file..."):    
             file = file_name.name
-            sample_pdf = genai.upload_file(file)
+            #print(file_name.read())
+            sample_pdf = genai.upload_file(temp_file_path)
             model = genai.GenerativeModel(
                     model_name=model_name[2],
                     system_instruction=[
@@ -126,9 +131,8 @@ if file_name is not None:  # Kiểm tra xem người dùng đã chọn file chư
         st.error(f"Đã có lỗi xảy ra trong quá trình xử lý: {e}")
     finally:
         try:
-            os.remove(output_filename)  # Remove the generated file
             if file_name is not None:
-                os.remove(file_name.name)  # Remove the temporary uploaded PDF
+                os.remove(temp_file_path)  # Remove the temporary uploaded PDF
             for f in genai.list_files():
                 f.delete()
         except Exception as e:
