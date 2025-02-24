@@ -40,7 +40,7 @@ if file_name is not None:  # Kiểm tra xem người dùng đã chọn file chư
             #print(file_name.read())
             sample_pdf = genai.upload_file(temp_file_path)
             model = genai.GenerativeModel(
-                    model_name=model_name[2],
+                    model_name=model_name[1],
                     system_instruction=[
                         "Bạn là một nhà phân tích tài liệu kỹ thuật. Nhiệm vụ của bạn là:\
             - Trích xuất thông tin chi tiết quan trọng từ PDF với độ chính xác 98%\
@@ -50,7 +50,7 @@ if file_name is not None:  # Kiểm tra xem người dùng đã chọn file chư
             "Nhiệm vụ của bạn là hiểu dữ liệu trong tệp và trả lời các câu hỏi về dữ liệu đó.",
                     ],
             )
-            prompt ='Dữ liệu đầu ra dạng json. Số hợp đồng (viết tắt là shd và chỉ 1 lần xuất hiện), danh sách thiết bị(viết tắt ds), Tên thiết bị (viết tắt ttb), model, hãng, nước sản xuất, đơn vị tính (viết tắt dvt),  số lượng, số seri (đầy đủ thông tin như tệp và một dòng), tên cty bên giao (viết tắt là cty và chỉ hiển thị 1 lần), phụ kiện (viết tắt là pk, chi tiết phụ kiện hoặc cấu hình, nếu không có thì để trống). Yêu cầu như sau:\
+            prompt ='Dữ liệu đầu ra dạng json. Số hợp đồng (viết tắt là shd và chỉ 1 lần xuất hiện), danh sách thiết bị(viết tắt ds), Tên thiết bị (viết tắt ttb), model, hãng, nước sản xuất, đơn vị tính (viết tắt dvt),  số lượng, số seri (đầy đủ thông tin như tệp và một dòng), tên cty bên giao (viết tắt là cty và chỉ hiển thị 1 lần), phụ kiện (viết tắt là pk, chi tiết phụ kiện hoặc cấu hình kỹ thuật và có đẩy đủ số lượng, đơn vị tính, dữ liệu dạng chuỗi và xuống dòng ở từng mục và có chữ "Gồm:" ở dòng đầu tiên, nếu không có thì để trống). Yêu cầu như sau:\
             shd:\
             ttb:\
             model:\
