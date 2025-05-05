@@ -174,7 +174,7 @@ if file_name is not None:
             print(f"File đã tải lên Google AI: {sample_pdf.name}")
 
             model = genai.GenerativeModel(
-                model_name=current_model,
+                model_name='gemini-2.0-flash-lite',
                 system_instruction=[
                     "Bạn là một nhà phân tích tài liệu kỹ thuật, chuyên trích xuất thông tin chi tiết từ 'Biên bản giao nhận - Nghiệm thu kiêm phiếu bảo hành' và các tài liệu tương tự.",
                     "Nhiệm vụ của bạn là hiểu dữ liệu trong tệp PDF được cung cấp, đặc biệt là từ các bảng biểu, và trích xuất các thông tin được yêu cầu dưới định dạng JSON.",
