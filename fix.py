@@ -149,31 +149,70 @@ h1 {
 """, unsafe_allow_html=True)
 # --- Kết thúc Cấu hình giao diện và CSS ---
 
+# --- Cấu hình Google API Key từ config.ini ---
+# Đặt khối này ở đầu script để đảm bảo API được cấu hình sớm nhất có thể
+config = configparser.ConfigParser()
+config_file_path = 'config.ini'
+google_api_key = None # Khởi tạo biến
+
+if os.path.exists(config_file_path):
+    config.read(config_file_path)
+    try:
+        # Dòng này đọc giá trị của GEMINI_API_KEY từ section [API] trong file config.ini
+        google_api_key = config['API']['GEMINI_API_KEY'] # <-- DÒNG LẤY API KEY
+
+        # Dòng này sử dụng giá trị API key vừa đọc để cấu hình thư viện Google Generative AI
+        genai.configure(api_key=google_api_key)      # <-- DÒNG SỬ DỤNG API KEY ĐỂ CẤU HÌNH
+
+        print("Đã đọc API Key từ config.ini và cấu hình genai.")
+
+    except KeyError:
+        st.error(f"Lỗi cấu hình: File '{config_file_path}' không có section [API] hoặc key GEMINI_API_KEY. Vui lòng kiểm tra lại file config.ini.", icon="❌")
+        # Không st.stop() ngay đây để hiển thị giao diện còn lại, nhưng sẽ báo lỗi khi gọi API
+        google_api_key = None # Đảm bảo key là None nếu có lỗi đọc config
+    except Exception as e:
+        st.error(f"Lỗi khi đọc file cấu hình '{config_file_path}': {e}. Vui lòng kiểm tra định dạng file config.ini.", icon="❌")
+        # Không st.stop() ngay đây
+        google_api_key = None # Đảm bảo key là None nếu có lỗi khác
+else:
+    st.error(f"Lỗi cấu hình: Không tìm thấy file cấu hình '{config_file_path}'. Vui lòng tạo file này với section [API] và key GEMINI_API_KEY.", icon="❌")
+    # Không st.stop() ngay đây
+    google_api_key = None # Đảm bảo key là None nếu không tìm thấy file
+# --- Kết thúc cấu hình API Key ---
+
 
 st.title("Công cụ Chuyển đổi Biên bản Bàn giao")
 # Sử dụng cột để bố cục phần upload và thông tin (vẫn giữ cột để tổ chức)
-col1, col2 = st.columns([2, 1]) # Tỷ lệ cột
+# col1, col2 = st.columns([2, 1]) # Tỷ lệ cột - Có thể bỏ cột nếu muốn đơn giản hơn trong centered layout
 
-
+# with col1: # Nếu bỏ cột, đưa nội dung ra ngoài with block
 st.subheader("Tải lên Biên bản bàn giao gốc (PDF)")
 file_name = st.file_uploader("Chọn file PDF Biên bản bàn giao công ty", type="pdf", label_visibility="collapsed", key="pdf_uploader")
+
+# with col2: # Nếu bỏ cột, đưa nội dung ra ngoài with block
+st.markdown("ℹ️ **Lưu ý:** File mẫu Word (`bbbg.docx`) phải nằm cùng thư mục với script.")
 
 
 temp_file_path = None
 
-if file_name is not None:
+# Chỉ tiếp tục xử lý nếu có file được tải lên VÀ API Key đã được cấu hình thành công
+if file_name is not None and google_api_key is not None:
     try:
         st.info(f"📥 Đang tải lên và xử lý file: **{file_name.name}**", icon="⏳")
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
-            temp_file.write(file_name.getvalue())
+            temp_file.write(file_name.getvalue()) # Sửa lỗi cú pháp ở đây
             temp_file_path = temp_file.name
             print(f"File tạm được lưu tại: {temp_file_path}")
 
-        with st.spinner("✨ Đang trích xuất dữ liệu từ file PDF..."):
-            sample_pdf = genai.upload_file(path=temp_file_path)
-            print(f"File đã tải lên Google AI: {sample_pdf.name}")
+        # --- Chọn Model AI ---
+        model_name_list = ["gemini-1.5-flash", "gemini-1.5-pro"] # Danh sách các model có thể dùng
+        current_model = model_name_list[0] # Chọn model mặc định (ví dụ: flash)
 
+        with st.spinner("✨ Đang trích xuất dữ liệu từ file PDF..."):
+
+            # Tạo đối tượng model sau khi API Key đã được cấu hình
             model = genai.GenerativeModel(
+                # Sử dụng model_name đã được chọn
                 model_name='gemini-2.0-flash-lite',
                 system_instruction=[
                     "Bạn là một nhà phân tích tài liệu kỹ thuật, chuyên trích xuất thông tin chi tiết từ 'Biên bản giao nhận - Nghiệm thu kiêm phiếu bảo hành' và các tài liệu tương tự.",
@@ -184,6 +223,9 @@ if file_name is not None:
                     "Đảm bảo đầu ra JSON tuân thủ cấu trúc được yêu cầu trong prompt, sử dụng các viết tắt: shd (cho giá trị số định danh), shd_type (cho loại số định danh), cty, ds, ttb, model, hang, nsx, dvt, sl, seri, pk."
                 ],
             )
+
+            sample_pdf = genai.upload_file(path=temp_file_path)
+            print(f"File đã tải lên Google AI: {sample_pdf.name}")
 
             prompt ="""
 Dữ liệu đầu ra dạng json.
@@ -550,7 +592,9 @@ Ví dụ cấu trúc JSON mong muốn:
              print("Danh sách thiết bị 'ds' trống hoặc không hợp lệ.")
 
     except Exception as e:
-        st.error(f"❌ Đã có lỗi xảy ra trong quá trình xử lý file: {e}", icon="❌")
+        # Loại bỏ lỗi "No API_KEY" khỏi thông báo lỗi chung nếu nó đã được xử lý ở trên
+        if "No API_KEY or ADC found" not in str(e):
+             st.error(f"❌ Đã có lỗi xảy ra trong quá trình xử lý file: {e}", icon="❌")
         print(f"Lỗi chung khi xử lý file: {e}")
 
     finally:
@@ -562,5 +606,9 @@ Ví dụ cấu trúc JSON mong muốn:
                 st.warning(f"⚠️ Lỗi khi xóa file tạm thời: {e}", icon="⚠️")
                 print(f"Lỗi xóa file tạm: {e}")
 
-else:
+elif google_api_key is not None:
+     # Chỉ hiển thị thông báo chọn file nếu API key đã được cấu hình thành công
     st.info("⬆️ Vui lòng chọn một file PDF để bắt đầu.", icon="📄")
+
+# else: # Trường hợp API key không cấu hình thành công, thông báo lỗi đã hiển thị ở trên
+#    pass
