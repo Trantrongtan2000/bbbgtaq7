@@ -10,6 +10,17 @@ import re
 import configparser
 from io import BytesIO
 
+def convert_none_to_empty_string(obj):
+    """Recursively converts None values in dictionaries and lists to empty strings."""
+    if isinstance(obj, dict):
+        return {k: convert_none_to_empty_string(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_none_to_empty_string(elem) for elem in obj]
+    elif obj is None:
+        return ""
+    else:
+        return obj
+
 def clean_filename(filename):
     """Loại bỏ các ký tự đặc biệt khỏi tên file và giới hạn độ dài."""
     chars_to_remove = (r'[\\/*?":<>|.]')
@@ -186,8 +197,8 @@ st.title("Công cụ Chuyển đổi Biên bản Bàn giao")
 # col1, col2 = st.columns([2, 1]) # Tỷ lệ cột - Có thể bỏ cột nếu muốn đơn giản hơn trong centered layout
 
 # with col1: # Nếu bỏ cột, đưa nội dung ra ngoài with block
-st.subheader("Tải lên Biên bản bàn giao gốc (PDF)")
-file_name = st.file_uploader("Chọn file PDF Biên bản bàn giao công ty", type="pdf", label_visibility="collapsed", key="pdf_uploader")
+st.subheader("Tải lên Biên bản bàn giao gốc (PDF hoặc Ảnh)")
+file_name = st.file_uploader("Chọn file Biên bản bàn giao công ty (PDF hoặc Ảnh)", type=["pdf", "jpg", "jpeg", "png"], label_visibility="collapsed", key="file_uploader")
 
 # with col2: # Nếu bỏ cột, đưa nội dung ra ngoài with block
 st.markdown("ℹ️ **Lưu ý:** File mẫu Word (`bbbg.docx`) phải nằm cùng thư mục với script.")
@@ -199,8 +210,12 @@ temp_file_path = None
 if file_name is not None and google_api_key is not None:
     try:
         st.info(f"📥 Đang tải lên và xử lý file: **{file_name.name}**", icon="⏳")
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
-            temp_file.write(file_name.getvalue()) # Sửa lỗi cú pháp ở đây
+        # Determine suffix based on file type
+        file_extension = file_name.name.split('.')[-1].lower()
+        suffix = f".{file_extension}" if file_extension in ["pdf", "jpg", "jpeg", "png"] else ""
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
+            temp_file.write(file_name.getvalue())
             temp_file_path = temp_file.name
             print(f"File tạm được lưu tại: {temp_file_path}")
 
@@ -216,10 +231,7 @@ if file_name is not None and google_api_key is not None:
                 model_name='gemini-2.0-flash-lite',
                 system_instruction=[
                     "Bạn là một nhà phân tích tài liệu kỹ thuật, chuyên trích xuất thông tin chi tiết từ 'Biên bản giao nhận - Nghiệm thu kiêm phiếu bảo hành' và các tài liệu tương tự.",
-                    "Nhiệm vụ của bạn là hiểu dữ liệu trong tệp PDF được cung cấp, đặc biệt là từ các bảng biểu, và trích xuất các thông tin được yêu cầu dưới định dạng JSON.",
-                    "Trích xuất thông tin chính xác từ các bảng, bao gồm danh sách thiết bị. Đối với mỗi thiết bị trong bảng, hãy xác định: Tên thiết bị (dựa vào cột MÔ TẢ), Mã hàng (dựa vào cột MÃ HÀNG), Số seri (dựa vào cột IMEI), Đơn vị tính, Số lượng, và Phụ kiện (dựa vào cột SỐ LƯỢNG HÀNG TẠNG hoặc mô tả thêm).",
-                    "Xác định rõ ràng Số định danh chính của biên bản (có thể là Số hợp đồng, mã đề nghị, số PO). Đồng thời xác định *loại* của số định danh này (ví dụ: Hợp đồng, PO, Đề nghị, Khác) dựa vào các cụm từ đi kèm.",
-                    "Xác định tên công ty bàn giao (Bên A).",
+                    "Nhiệm vụ của bạn là trích xuất các thông tin sau từ tệp PDF hoặc ảnh được cung cấp, đặc biệt là từ các bảng biểu, và trả về dưới định dạng JSON hợp lệ.",
                     "Đảm bảo đầu ra JSON tuân thủ cấu trúc được yêu cầu trong prompt, sử dụng các viết tắt: shd (cho giá trị số định danh), shd_type (cho loại số định danh), cty, ds, ttb, model, hang, nsx, dvt, sl, seri, pk."
                 ],
             )
@@ -228,40 +240,41 @@ if file_name is not None and google_api_key is not None:
             print(f"File đã tải lên Google AI: {sample_pdf.name}")
 
             prompt ="""
-Dữ liệu đầu ra dạng json.
-Trích xuất các thông tin sau:
-- Số định danh chính của biên bản (có thể là Số hợp đồng, số đề xuất, mã đề nghị hoặc số PO) (viết tắt là shd, chỉ 1 lần xuất hiện). Trích xuất giá trị số hoặc mã.
-- Loại của số định danh này (ví dụ: "Hợp đồng", "PO", "Đề nghị", "Khác") (viết tắt là shd_type, chỉ 1 lần xuất hiện). Dựa vào các cụm từ đi kèm như "HĐ số:", "Theo HĐ số:", "Số Hợp Đồng:", "Dựa theo HĐ số:", "PO số:", "Số PO:", "Dựa theo số PO:", "Mã đề nghị:", "Số đề xuất:". Nếu không rõ loại, dùng "Khác".
-- Tên công ty bên giao (viết tắt là cty, chỉ hiển thị 1 lần).
-- Danh sách thiết bị (viết tắt là ds), mỗi thiết bị trong danh sách là một đối tượng json với các thuộc tính:
-  - Tên thiết bị (viết tắt ttb).
-  - Model (viết tắt model).
-  - Hãng (viết tắt hang).
-  - Nước sản xuất (viết tắt nsx).
-  - Đơn vị tính (viết tắt dvt).
-  - Số lượng (viết tắt sl).
-  - Số seri (viết tắt seri, đầy đủ thông tin như tệp, nếu có nhiều seri cho 1 dòng thiết bị trong PDF thì đưa vào mảng/list, nếu chỉ có 1 thì là chuỗi string, nếu không có thì để trống hoặc null).
-  - Phụ kiện (viết tắt là pk, chi tiết phụ kiện hoặc cấu hình kỹ thuật, dữ liệu dạng chuỗi string, nếu có nhiều dòng phụ kiện cho 1 thiết bị thì nối lại và xuống dòng bằng '\n', nếu không có thì để trống hoặc null).
+**Thông tin cần trích xuất:**
+- **Số định danh chính (shd):** Giá trị số hoặc mã của biên bản (ví dụ: Số hợp đồng, số đề xuất, mã đề nghị, số PO). Chỉ xuất hiện một lần.
+- **Loại số định danh (shd_type):** Xác định loại của 'shd' (ví dụ: "Hợp đồng", "PO", "Đề nghị", "Khác"). Dựa vào các cụm từ như "HĐ số:", "Theo HĐ số:", "Số Hợp Đồng:", "Dựa theo HĐ số:", "PO số:", "Số PO:", "Dựa theo số PO:", "Mã đề nghị:", "Số đề xuất:". Nếu không rõ loại, dùng "Khác". Chỉ xuất hiện một lần.
+- **Tên công ty bàn giao (cty):** Tên đầy đủ của công ty bên giao (Bên A). Chỉ xuất hiện một lần.
+- **Danh sách thiết bị (ds):** Một mảng các đối tượng JSON, mỗi đối tượng đại diện cho một thiết bị được trích xuất từ bảng. Đối với mỗi thiết bị, hãy xác định:
+    - **Tên thiết bị (ttb):** Dựa vào cột 'MÔ TẢ'.
+    - **Model (model):**
+    - **Hãng (hang):**
+    - **Nước sản xuất (nsx):**
+    - **Đơn vị tính (dvt):**
+    - **Số lượng (sl):**
+    - **Số seri (seri):** Dựa vào cột 'IMEI'. Nếu có nhiều seri cho một dòng thiết bị, trả về dưới dạng mảng chuỗi. Nếu chỉ có một, trả về chuỗi. Nếu không có, trả về `null`.
+    - **Phụ kiện (pk):** Chi tiết phụ kiện hoặc cấu hình kỹ thuật. Dữ liệu dạng chuỗi. Nếu có nhiều dòng phụ kiện cho một thiết bị, nối lại và xuống dòng bằng `\n`. Nếu không có, trả về `null`.
 
-Ví dụ cấu trúc JSON mong muốn:
+**Cấu trúc JSON mong muốn:**
+```json
 {
   "shd": "Giá trị số/mã",
   "shd_type": "Hợp đồng" hoặc "PO" hoặc "Đề nghị" hoặc "Khác",
-  "cty": "...",
+  "cty": "Tên công ty",
   "ds": [
     {
-      "ttb": "...",
-      "model": "...",
-      "hang": "...",
-      "nsx": "...",
-      "dvt": "...",
-      "sl": "...",
-      "seri": "..." hoặc ["...", "..."] hoặc null,
-      "pk": "Gồm:\n- Phụ kiện A (SL: ... ĐVT: ...)\n- Phụ kiện B..." hoặc null
-    },
-    ...
+      "ttb": "Tên thiết bị",
+      "model": "Model thiết bị",
+      "hang": "Hãng sản xuất",
+      "nsx": "Nước sản xuất",
+      "dvt": "Đơn vị tính",
+      "sl": "Số lượng",
+      "seri": "Số seri" hoặc ["seri1", "seri2"] hoặc "",
+      "pk": "Gồm:\n- Phụ kiện A (SL: ... ĐVT: ...)\n- Phụ kiện B..." hoặc ""
+    }
   ]
 }
+```
+Đảm bảo đầu ra là JSON hợp lệ và chỉ chứa dữ liệu JSON, không có bất kỳ văn bản giải thích nào khác.
 """
             response = model.generate_content([sample_pdf, prompt])
 
@@ -281,7 +294,9 @@ Ví dụ cấu trúc JSON mong muốn:
         data = None
         try:
             data = json.loads(a)
-            print("Dữ liệu JSON nhận được:", json.dumps(data, indent=2, ensure_ascii=False))
+            # Convert all None values to empty strings recursively
+            data = convert_none_to_empty_string(data)
+            print("Dữ liệu JSON nhận được (sau khi xử lý None):", json.dumps(data, indent=2, ensure_ascii=False))
 
             extracted_shd = data.get('shd')
             extracted_shd_type = data.get('shd_type')
