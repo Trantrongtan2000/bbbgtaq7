@@ -104,6 +104,349 @@ def shorten_company_name(company_name):
 
 # --- Kết thúc hàm rút gọn tên công ty ---
 
+def process_and_generate_word_doc(data, raw_ai_response_text):
+    """
+    Processes the extracted data from AI and generates the Word document.
+    This function is called only if valid data is obtained from AI models.
+    """
+    try:
+        # Convert all None values to empty strings recursively
+        data = convert_none_to_empty_string(data)
+        print("Dữ liệu JSON nhận được (sau khi xử lý None):", json.dumps(data, indent=2, ensure_ascii=False))
+
+        extracted_shd = data.get('shd')
+        extracted_shd_type = data.get('shd_type')
+        print(f"Extracted shd value from AI: '{extracted_shd}' (Type: '{extracted_shd_type}')")
+
+        if 'ds' not in data or not isinstance(data.get('ds'), list):
+             st.error("❌ Phản hồi từ AI không chứa danh sách thiết bị hợp lệ ('ds'). Vui lòng thử lại với file khác hoặc kiểm tra nội dung file.", icon="❌")
+             print(f"Phản hồi AI thiếu khóa 'ds' hoặc 'ds' không phải list: {data}")
+             return False # Return False to indicate failure to process data
+        if data and 'shd' not in data:
+             print(f"Phản hồi AI thiếu khóa 'shd', gán giá trị mặc định.")
+             data['shd'] = ''
+        if data and 'shd_type' not in data:
+             print(f"Phản hồi AI thiếu khóa 'shd_type', gán giá trị mặc định.")
+             data['shd_type'] = 'Khác'
+        if data and 'cty' not in data:
+             print(f"Phản hồi AI thiếu khóa 'cty', gán giá trị mặc định.")
+             data['cty'] = 'Công ty không rõ'
+
+        if data and 'ds' in data:
+            data['ds'] = [item for item in data['ds'] if isinstance(item, dict)]
+            if not data['ds']:
+                 st.warning("⚠️ Danh sách thiết bị ('ds') trích xuất được trống hoặc không có mục hợp lệ.", icon="⚠️")
+                 print("Danh sách thiết bị sau khi lọc rỗng.")
+                 return False # Return False to indicate no valid devices
+
+    except json.JSONDecodeError as e:
+        st.error(f"❌ Lỗi khi giải mã JSON từ phản hồi AI: {e}. Phản hồi có thể không đúng định dạng JSON.", icon="❌")
+        st.text_area("Phản hồi gốc từ AI (gây lỗi JSON):", raw_ai_response_text, height=200)
+        print(f"Phản hồi AI gốc gây lỗi JSON (trong hàm xử lý): {raw_ai_response_text}")
+        return False
+    except Exception as e:
+        st.error(f"❌ Đã có lỗi không mong muốn khi xử lý dữ liệu từ AI: {e}", icon="❌")
+        print(f"Dữ liệu nhận được trước lỗi (trong hàm xử lý): {data}")
+        return False
+
+    # --- Logic gộp thiết bị và điền vào Word ---
+    if data and 'ds' in data and data['ds']:
+        st.info("✍️ Đang tạo file Word...", icon="⏳")
+        try:
+            # --- BƯỚC 1: Nhóm các thiết bị VÀ TÍNH TỔNG SỐ LƯỢNG GỘP ---
+            grouped_devices = {}
+
+            for item in data['ds']:
+                group_key_parts = []
+                group_key_parts.append(standardize_string(item.get('ttb', '')).strip())
+                group_key_parts.append(str(item.get('model', '')).strip())
+                group_key_parts.append(str(item.get('hang', '')).strip())
+                group_key_parts.append(str(item.get('nsx', '')).strip())
+                group_key_parts.append(str(item.get('dvt', '')).strip())
+                group_key_parts.append(str(item.get('pk', '')).strip())
+
+                group_key = tuple(group_key_parts)
+
+                current_sl_raw = item.get('sl', '0')
+                current_sl = 0
+                try:
+                    cleaned_sl_str = re.sub(r'[^\d.]', '', str(current_sl_raw).strip())
+                    current_sl = float(cleaned_sl_str) if cleaned_sl_str else 0
+                except (ValueError, TypeError):
+                    print(f"Warning: Could not convert item quantity '{current_sl_raw}' to number during grouping. Defaulting to 0.")
+                    current_sl = 0
+
+                current_seri = item.get('seri', [])
+                if not isinstance(current_seri, list):
+                    current_seri = [current_seri]
+                cleaned_current_seri = [str(s).strip() for s in current_seri if s is not None and str(s).strip() != '']
+
+                if group_key not in grouped_devices:
+                    grouped_devices[group_key] = {
+                        'ttb': str(item.get('ttb', '')).strip(),
+                        'model': str(item.get('model', '')).strip(),
+                        'hang': str(item.get('hang', '')).strip(),
+                        'nsx': str(item.get('nsx', '')).strip(),
+                        'dvt': str(item.get('dvt', '')).strip(),
+                        'pk': str(item.get('pk', '')).strip(),
+                        'total_sl': current_sl,
+                        'seri': cleaned_current_seri
+                    }
+                else:
+                    grouped_devices[group_key]['total_sl'] += current_sl
+                    existing_seri_set = set(grouped_devices[group_key]['seri'])
+                    new_seri_to_add = [s for s in cleaned_current_seri if s and s not in existing_seri_set]
+                    grouped_devices[group_key]['seri'].extend(new_seri_to_add)
+
+
+            # Bước 2: Chuyển đổi dictionary nhóm thành danh sách cuối cùng
+            final_device_list = []
+            for key, grouped_item in grouped_devices.items():
+                seri_string = ''
+                if grouped_item['seri']:
+                     unique_seri = sorted(list(set(grouped_item['seri'])))
+                     seri_string = 'Số seri: ' + ', '.join(unique_seri)
+                else:
+                    seri_string = 'Số seri: Không có'
+
+                final_device_list.append({
+                    'ttb': grouped_item['ttb'],
+                    'model': grouped_item['model'],
+                    'hang': grouped_item['hang'],
+                    'nsx': grouped_item['nsx'],
+                    'dvt': grouped_item['dvt'],
+                    'sl': grouped_item['total_sl'],
+                    'pk': grouped_item['pk'],
+                    'seri_text': seri_string
+                })
+
+            # Bước 3: Điền dữ liệu vào bảng Word
+            try:
+                 document = Document('bbbg.docx')
+            except Exception as e:
+                 st.error(f"❌ Không tìm thấy hoặc không mở được file mẫu 'bbbg.docx'. Vui lòng đảm bảo file này nằm cùng thư mục với script.", icon="❌")
+                 raise e
+
+            font_name= 'Times New Roman'
+            font_size=12
+
+            print("\n--- Cấu trúc Paragraphs và Runs trong bbbg.docx ---")
+            try:
+                for i, paragraph in enumerate(document.paragraphs):
+                    print(f"Paragraph {i}: '{paragraph.text.strip()}'")
+                    for j, run in enumerate(paragraph.runs):
+                        print(f"  Run {j}: '{run.text}' (Length: {len(run.text)})")
+                print("-----------------------------------------------\n")
+            except Exception as e:
+                print(f"Lỗi khi in cấu trúc Paragraphs và Runs: {e}")
+
+
+            try:
+                table = document.tables[0]
+            except IndexError:
+                 st.error("❌ File mẫu 'bbbg.docx' không chứa bảng nào.", icon="❌")
+                 raise IndexError
+
+            if len(table.rows) > 1:
+                rows_to_remove_indices = range(len(table.rows) - 1, 0, -1)
+                for i in rows_to_remove_indices:
+                    row = table.rows[i]
+                    try:
+                        tbl = row._tbl
+                        tbl.getparent().remove(tbl)
+                    except Exception as e:
+                        print(f"Lỗi khi xóa hàng {i} trong bảng mẫu: {e}")
+
+            count=0
+            for item in final_device_list:
+                count += 1
+                ttb_text = str(item.get('ttb', '')).strip()
+                model_text = str(item.get('model', '')).strip()
+                hang_text = str(item.get('hang', '')).strip()
+                nsx_text = str(item.get('nsx', '')).strip()
+                dvt_text = str(item.get('dvt', '')).strip()
+                sl_text = str(int(item.get('sl', 0))).strip() if item.get('sl') is not None else ""
+                pk_text = str(item.get('pk', '')).strip()
+
+                device_info_text = f"{ttb_text}\n- Model: {model_text}\n- Hãng: {hang_text}\n- NSX: {nsx_text}"
+                
+                if pk_text:
+                    # remove "Cấu hình bao gồm:" and similar phrases, and leading `-`
+                    pk_text = re.sub(r'cấu hình bao gồm:','', pk_text, flags=re.IGNORECASE).strip()
+                    pk_text = pk_text.replace('-', '').strip()
+                    accessories = pk_text.split('\n')
+                    # Indent accessories
+                    accessories = [f"  + {acc.strip()}" for acc in accessories if acc.strip()]
+                    if accessories:
+                        device_info_text += "\n- Phụ kiện:\n" + "\n".join(accessories)
+                else:
+                    device_info_text += "\n- Phụ kiện: Không có"
+
+                new_device = [str(count),
+                              device_info_text,
+                              dvt_text,
+                              sl_text,
+                              item['seri_text']
+                             ]
+
+                row = table.add_row()
+                for i, cell_text in enumerate(new_device):
+                    if i in (0, 2, 3):
+                        ali = WD_ALIGN_PARAGRAPH.CENTER
+                    else:
+                        ali = WD_ALIGN_PARAGRAPH.LEFT
+                    try:
+                        cell = row.cells[i]
+                        cell.text = str(cell_text)
+                        for paragraph in cell.paragraphs:
+                            paragraph.alignment = ali
+                            for run in paragraph.runs:
+                                run.font.name = font_name
+                                run.font.size = Pt(font_size)
+                    except IndexError:
+                        st.warning(f"⚠️ Lỗi: Bảng trong file mẫu có ít hơn {len(new_device)} cột ({len(row.cells)}). Không thể điền dữ liệu đầy đủ cho hàng thiết bị thứ {count}.", icon="⚠️")
+                        print(f"Lỗi: Hàng {count} có {len(row.cells)} ô, nhưng dữ liệu có {len(new_device)} mục.")
+                        pass
+
+            # --- Thay thế ngày tháng năm thực tế vào dòng Tp.HCM, ngày ... ---
+            from datetime import datetime
+            now = datetime.now()
+            current_day = str(now.day)
+            current_month = str(now.month)
+            current_year = str(now.year)
+            for paragraph in document.paragraphs:
+                if "Tp.HCM" in paragraph.text and ("day" in paragraph.text or "month" in paragraph.text or "year" in paragraph.text):
+                    new_text = paragraph.text
+                    new_text = new_text.replace("day", current_day).replace("month", current_month).replace("year", current_year)
+                    paragraph.text = new_text
+
+            # --- Tìm và thay thế placeholder cho Số hợp đồng (ĐỊNH DẠNG THEO LOẠI) ---
+            shd_value_raw = data.get('shd')
+            shd_type_raw = data.get('shd_type')
+
+            shd_value = str(shd_value_raw).strip() if shd_value_raw is not None else ''
+            shd_type = str(shd_type_raw).strip() if shd_type_raw is not None else 'Khác'
+
+            shd_value_to_replace = ''
+
+            if shd_value:
+                shd_type_lower = shd_type.lower()
+
+                if 'hợp đồng' in shd_type_lower or 'hd' in shd_type_lower:
+                    shd_value_to_replace = f"Dựa theo HĐ số: {shd_value}"
+                elif 'po' in shd_type_lower or 'đề nghị' in shd_type_lower or 'denghi' in shd_type_lower or 'mã đề nghị' in shd_type_lower:
+                    shd_value_to_replace = f"Dựa theo PO: {shd_value}"
+                else:
+                    shd_value_to_replace = f"Dựa theo số: {shd_value}"
+
+            print(f"Value to replace placeholder with: '{shd_value_to_replace}' (Derived from value: '{shd_value}', type: '{shd_type}')")
+
+
+            shd_placeholder_replaced = False
+            shd_pattern = re.compile(re.escape("shd"), re.IGNORECASE)
+
+            for paragraph in document.paragraphs:
+                 if shd_pattern.search(paragraph.text):
+                      for run in paragraph.runs:
+                            original_run_text = run.text
+                            new_run_text = shd_pattern.sub(shd_value_to_replace, original_run_text)
+
+                            if new_run_text != original_run_text:
+                                 run.text = new_run_text
+                                 shd_placeholder_replaced = True
+
+            if not shd_placeholder_replaced:
+                 st.warning("⚠️ Không tìm thấy placeholder 'shd' (hoặc 'SHD',...) trong các đoạn văn của file mẫu. Số hợp đồng sẽ không được điền vào file Word.", icon="⚠️")
+                 print("Không tìm thấy placeholder 'shd' (hoặc 'SHD',...).")
+
+            # --- KẾT THÚC LOGIC THAY THẾ PLACEHOLDER (ĐỊNH DẠNG THEO LOẠI) ---
+
+            # --- Tạo tên file đầu ra theo yêu cầu mới ---
+            # Format: {Quantity}{DeviceName}-{Quantity}{DeviceName}_{ShortCompanyName}_{SHDValuePart}
+
+            # 1. Chuỗi thông tin thiết bị (Số lượng + Tên thiết bị cho mỗi loại gộp)
+            device_info_filename_parts = []
+            for item in final_device_list:
+                quantity = int(item.get('sl', 0))
+                formatted_quantity = f"{quantity:02d}" if quantity >= 0 else "00"
+                device_name = str(item.get('ttb', '')).strip()
+
+                cleaned_device_name_part = re.sub(r'[\\/*?":<>|{}\[\]().,_]', '', device_name).strip()
+
+                if cleaned_device_name_part:
+                     device_info_filename_parts.append(f"{formatted_quantity} {cleaned_device_name_part}")
+
+            device_info_string_for_filename = "-".join(device_info_filename_parts)
+
+            # 2. Lấy và rút gọn tên công ty (Bên giao)
+            cty_name_raw = data.get('cty', 'UnknownCompany')
+            cty_name_full = str(cty_name_raw).strip() if cty_name_raw is not None else 'UnknownCompany'
+            cleaned_cty_name = shorten_company_name(cty_name_full)
+
+            if not cleaned_cty_name:
+                cleaned_cty_name = re.sub(r'[\\/*?":<>|{}\[\]()]', '', cty_name_full).strip(" ,.-_&")
+
+
+            # 3. Lấy giá trị SHD (chỉ phần số/mã trước dấu gạch ngang nếu có)
+            shd_value_for_filename = shd_value
+
+            shd_parts = shd_value_for_filename.split('-', 1)
+            shd_cleaned_filename_part = shd_parts[0].strip() if shd_parts and shd_parts[0].strip() else ''
+
+            shd_cleaned_filename_part = clean_filename(shd_cleaned_filename_part)
+
+
+            # 4. Kết hợp các phần và làm sạch tên file lần cuối
+            part1 = device_info_string_for_filename if device_info_string_for_filename else "ThietBi"
+            part2 = cleaned_cty_name if cleaned_cty_name else "CongTy"
+            part3 = shd_cleaned_filename_part if shd_cleaned_filename_part else "SoDinhDanh"
+
+            raw_output_filename = f"{part1}_{part2}_{part3}"
+
+            output_filename_final = clean_filename(raw_output_filename)
+
+            if not output_filename_final.lower().endswith('.docx'):
+                 output_filename = output_filename_final + '.docx'
+            else:
+                 output_filename = output_filename_final
+
+            if not output_filename or output_filename.lower() == '.docx' or len(output_filename) < (len(".docx") + 3):
+                fallback_shd_part = shd_cleaned_filename_part if shd_cleaned_filename_part else "NoID"
+                fallback_cty_part = cleaned_cty_name if cleaned_cty_name else "CongTy"
+                output_filename = f"BienBanBanGiaoNoiBo_Fallback_{fallback_cty_part}_{fallback_shd_part}.docx"
+
+
+            print(f"Generated output filename: {output_filename}")
+
+            # --- KẾT THÚC TẠO TÊN FILE ĐẦU RA ---
+
+
+            byte_io = BytesIO()
+            document.save(byte_io)
+            byte_io.seek(0)
+
+            st.download_button(
+                label="✅ Tải xuống file Word Biên bản bàn giao nội bộ",
+                data=byte_io,
+                file_name=output_filename,
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
+
+            st.success(f"🎉 Đã xử lý file PDF và tạo Biên bản bàn giao nội bộ: **{output_filename}**", icon="✅")
+            return True # Indicate success
+
+        except Exception as e:
+             st.error(f"❌ Đã có lỗi xảy ra trong quá trình tạo file Word: {e}", icon="❌")
+             print(f"Lỗi xử lý Word: {e}")
+             return False # Indicate failure
+
+    elif data is not None:
+         st.warning("⚠️ Không trích xuất được danh sách thiết bị nào từ file PDF.", icon="⚠️")
+         print("Danh sách thiết bị 'ds' trống hoặc không hợp lệ.")
+         return False # Indicate no valid devices
+
+    return False # Default return if data is None or other issues
+
 # --- Cấu hình giao diện và CSS ---
 # Đổi layout từ wide sang centered
 st.set_page_config(page_title="Chuyển đổi Bàn giao", layout="centered")
@@ -219,27 +562,16 @@ if file_name is not None and google_api_key is not None:
             temp_file_path = temp_file.name
             print(f"File tạm được lưu tại: {temp_file_path}")
 
-        # --- Chọn Model AI ---
-        model_name_list = ["gemini-1.5-flash", "gemini-1.5-pro"] # Danh sách các model có thể dùng
-        current_model = model_name_list[0] # Chọn model mặc định (ví dụ: flash)
+        # --- Chọn Model AI và thử lại nếu lỗi ---
+        model_name_list = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash-lite"] # Danh sách các model có thể dùng
+        response = None
+        data = None
+        raw_ai_response = ""
+        
+        sample_pdf = genai.upload_file(path=temp_file_path)
+        print(f"File đã tải lên Google AI: {sample_pdf.name}")
 
-        with st.spinner("✨ Đang trích xuất dữ liệu từ file PDF..."):
-
-            # Tạo đối tượng model sau khi API Key đã được cấu hình
-            model = genai.GenerativeModel(
-                # Sử dụng model_name đã được chọn
-                model_name='gemini-2.0-flash-lite',
-                system_instruction=[
-                    "Bạn là một nhà phân tích tài liệu kỹ thuật, chuyên trích xuất thông tin chi tiết từ 'Biên bản giao nhận - Nghiệm thu kiêm phiếu bảo hành' và các tài liệu tương tự.",
-                    "Nhiệm vụ của bạn là trích xuất các thông tin sau từ tệp PDF hoặc ảnh được cung cấp, đặc biệt là từ các bảng biểu, và trả về dưới định dạng JSON hợp lệ.",
-                    "Đảm bảo đầu ra JSON tuân thủ cấu trúc được yêu cầu trong prompt, sử dụng các viết tắt: shd (cho giá trị số định danh), shd_type (cho loại số định danh), cty, ds, ttb, model, hang, nsx, dvt, sl, seri, pk."
-                ],
-            )
-
-            sample_pdf = genai.upload_file(path=temp_file_path)
-            print(f"File đã tải lên Google AI: {sample_pdf.name}")
-
-            prompt ="""
+        prompt = """
 **Thông tin cần trích xuất:**
 - **Số định danh chính (shd):** Giá trị số hoặc mã của biên bản (ví dụ: Số hợp đồng, số đề xuất, mã đề nghị, số PO). Chỉ xuất hiện một lần.
 - **Loại số định danh (shd_type):** Xác định loại của 'shd' (ví dụ: "Hợp đồng", "PO", "Đề nghị", "Khác"). Dựa vào các cụm từ như "HĐ số:", "Theo HĐ số:", "Số Hợp Đồng:", "Dựa theo HĐ số:", "PO số:", "Số PO:", "Dựa theo số PO:", "Mã đề nghị:", "Số đề xuất:". Nếu không rõ loại, dùng "Khác". Chỉ xuất hiện một lần.
@@ -276,335 +608,51 @@ if file_name is not None and google_api_key is not None:
 ```
 Đảm bảo đầu ra là JSON hợp lệ và chỉ chứa dữ liệu JSON, không có bất kỳ văn bản giải thích nào khác.
 """
-            response = model.generate_content([sample_pdf, prompt])
-
+        
+        for model_name in model_name_list:
             try:
-                 sample_pdf.delete()
-                 print(f"File đã xóa trên Google AI: {sample_pdf.name}")
+                with st.spinner(f"✨ Đang trích xuất dữ liệu từ file PDF bằng model: **{model_name}**..."):
+                    model = genai.GenerativeModel(
+                        model_name=model_name,
+                        system_instruction=[
+                            "Bạn là một nhà phân tích tài liệu kỹ thuật, chuyên trích xuất thông tin chi tiết từ 'Biên bản giao nhận - Nghiệm thu kiêm phiếu bảo hành' và các tài liệu tương tự.",
+                            "Nhiệm vụ của bạn là trích xuất các thông tin sau từ tệp PDF hoặc ảnh được cung cấp, đặc biệt là từ các bảng biểu, và trả về dưới định dạng JSON hợp lệ.",
+                            "Đảm bảo đầu ra JSON tuân thủ cấu trúc được yêu cầu trong prompt, sử dụng các viết tắt: shd (cho giá trị số định danh), shd_type (cho loại số định danh), cty, ds, ttb, model, hang, nsx, dvt, sl, seri, pk."
+                        ],
+                    )
+                    response = model.generate_content([sample_pdf, prompt])
+                    
+                    raw_ai_response = response.text
+                    print(f"Raw AI response (before stripping) from {model_name}: {raw_ai_response}")
+                    a = raw_ai_response.strip()
+                    if a.startswith("```json"):
+                        a = a[len("```json"):].strip()
+                    if a.endswith("```"):
+                         a = a[:-len("```")].strip()
+                    print(f"AI response (after stripping) from {model_name}: {a}")
+
+                    data = json.loads(a)
+                    # If JSON parsing is successful, break the loop
+                    break 
             except Exception as e:
-                 print(f"Lỗi khi xóa file trên Google AI: {e}")
+                st.warning(f"⚠️ Model {model_name} gặp lỗi: {e}. Đang thử model tiếp theo...", icon="⚠️")
+                print(f"Model {model_name} failed: {e}")
+                data = None # Reset data if current model fails
 
-        # --- Xử lý phản hồi từ AI ---
-        a = response.text.strip()
-        if a.startswith("```json"):
-            a = a[len("```json"):].strip()
-        if a.endswith("```"):
-             a = a[:-len("```")].strip()
-
-        data = None
         try:
-            data = json.loads(a)
-            # Convert all None values to empty strings recursively
-            data = convert_none_to_empty_string(data)
-            print("Dữ liệu JSON nhận được (sau khi xử lý None):", json.dumps(data, indent=2, ensure_ascii=False))
-
-            extracted_shd = data.get('shd')
-            extracted_shd_type = data.get('shd_type')
-            print(f"Extracted shd value from AI: '{extracted_shd}' (Type: '{extracted_shd_type}')")
-
-            if 'ds' not in data or not isinstance(data.get('ds'), list):
-                 st.error("❌ Phản hồi từ AI không chứa danh sách thiết bị hợp lệ ('ds'). Vui lòng thử lại với file khác hoặc kiểm tra nội dung file.", icon="❌")
-                 print(f"Phản hồi AI thiếu khóa 'ds' hoặc 'ds' không phải list: {data}")
-                 data = None
-            if data and 'shd' not in data:
-                 print(f"Phản hồi AI thiếu khóa 'shd', gán giá trị mặc định.")
-                 data['shd'] = ''
-            if data and 'shd_type' not in data:
-                 print(f"Phản hồi AI thiếu khóa 'shd_type', gán giá trị mặc định.")
-                 data['shd_type'] = 'Khác'
-            if data and 'cty' not in data:
-                 print(f"Phản hồi AI thiếu khóa 'cty', gán giá trị mặc định.")
-                 data['cty'] = 'Công ty không rõ'
-
-            if data and 'ds' in data:
-                data['ds'] = [item for item in data['ds'] if isinstance(item, dict)]
-                if not data['ds']:
-                     st.warning("⚠️ Danh sách thiết bị ('ds') trích xuất được trống hoặc không có mục hợp lệ.", icon="⚠️")
-                     print("Danh sách thiết bị sau khi lọc rỗng.")
-                     data = None
-
-        except json.JSONDecodeError as e:
-            st.error(f"❌ Lỗi khi giải mã JSON từ phản hồi AI: {e}. Phản hồi có thể không đúng định dạng JSON.", icon="❌")
-            st.text_area("Phản hồi gốc từ AI:", a, height=200)
-            print(f"Phản hồi AI gốc gây lỗi JSON: {a}")
-            data = None
+             sample_pdf.delete()
+             print(f"File đã xóa trên Google AI: {sample_pdf.name}")
         except Exception as e:
-            st.error(f"❌ Đã có lỗi không mong muốn khi xử lý dữ liệu từ AI: {e}", icon="❌")
-            print(f"Dữ liệu nhận được trước lỗi: {data}")
-            data = None
+             print(f"Lỗi khi xóa file trên Google AI: {e}")
 
-        # --- Logic gộp thiết bị và điền vào Word ---
-        if data and 'ds' in data and data['ds']:
-            st.info("✍️ Đang tạo file Word...", icon="⏳")
-            try:
-                # --- BƯỚC 1: Nhóm các thiết bị VÀ TÍNH TỔNG SỐ LƯỢNG GỘP ---
-                grouped_devices = {}
-
-                for item in data['ds']:
-                    group_key_parts = []
-                    group_key_parts.append(standardize_string(item.get('ttb', '')).strip())
-                    group_key_parts.append(str(item.get('model', '')).strip())
-                    group_key_parts.append(str(item.get('hang', '')).strip())
-                    group_key_parts.append(str(item.get('nsx', '')).strip())
-                    group_key_parts.append(str(item.get('dvt', '')).strip())
-                    group_key_parts.append(str(item.get('pk', '')).strip())
-
-                    group_key = tuple(group_key_parts)
-
-                    current_sl_raw = item.get('sl', '0')
-                    current_sl = 0
-                    try:
-                        cleaned_sl_str = re.sub(r'[^\d.]', '', str(current_sl_raw).strip())
-                        current_sl = float(cleaned_sl_str) if cleaned_sl_str else 0
-                    except (ValueError, TypeError):
-                        print(f"Warning: Could not convert item quantity '{current_sl_raw}' to number during grouping. Defaulting to 0.")
-                        current_sl = 0
-
-                    current_seri = item.get('seri', [])
-                    if not isinstance(current_seri, list):
-                        current_seri = [current_seri]
-                    cleaned_current_seri = [str(s).strip() for s in current_seri if s is not None and str(s).strip() != '']
-
-                    if group_key not in grouped_devices:
-                        grouped_devices[group_key] = {
-                            'ttb': str(item.get('ttb', '')).strip(),
-                            'model': str(item.get('model', '')).strip(),
-                            'hang': str(item.get('hang', '')).strip(),
-                            'nsx': str(item.get('nsx', '')).strip(),
-                            'dvt': str(item.get('dvt', '')).strip(),
-                            'pk': str(item.get('pk', '')).strip(),
-                            'total_sl': current_sl,
-                            'seri': cleaned_current_seri
-                        }
-                    else:
-                        grouped_devices[group_key]['total_sl'] += current_sl
-                        existing_seri_set = set(grouped_devices[group_key]['seri'])
-                        new_seri_to_add = [s for s in cleaned_current_seri if s and s not in existing_seri_set]
-                        grouped_devices[group_key]['seri'].extend(new_seri_to_add)
-
-
-                # Bước 2: Chuyển đổi dictionary nhóm thành danh sách cuối cùng
-                final_device_list = []
-                for key, grouped_item in grouped_devices.items():
-                    seri_string = ''
-                    if grouped_item['seri']:
-                         unique_seri = sorted(list(set(grouped_item['seri'])))
-                         seri_string = 'Số seri: ' + ', '.join(unique_seri)
-                    else:
-                        seri_string = 'Số seri: Không có'
-
-                    final_device_list.append({
-                        'ttb': grouped_item['ttb'],
-                        'model': grouped_item['model'],
-                        'hang': grouped_item['hang'],
-                        'nsx': grouped_item['nsx'],
-                        'dvt': grouped_item['dvt'],
-                        'sl': grouped_item['total_sl'],
-                        'pk': grouped_item['pk'],
-                        'seri_text': seri_string
-                    })
-
-                # Bước 3: Điền dữ liệu vào bảng Word
-                try:
-                     document = Document('bbbg.docx')
-                except Exception as e:
-                     st.error(f"❌ Không tìm thấy hoặc không mở được file mẫu 'bbbg.docx'. Vui lòng đảm bảo file này nằm cùng thư mục với script.", icon="❌")
-                     raise e
-
-                font_name= 'Times New Roman'
-                font_size=12
-
-                print("\n--- Cấu trúc Paragraphs và Runs trong bbbg.docx ---")
-                try:
-                    for i, paragraph in enumerate(document.paragraphs):
-                        print(f"Paragraph {i}: '{paragraph.text.strip()}'")
-                        for j, run in enumerate(paragraph.runs):
-                            print(f"  Run {j}: '{run.text}' (Length: {len(run.text)})")
-                    print("-----------------------------------------------\n")
-                except Exception as e:
-                    print(f"Lỗi khi in cấu trúc Paragraphs và Runs: {e}")
-
-
-                try:
-                    table = document.tables[0]
-                except IndexError:
-                     st.error("❌ File mẫu 'bbbg.docx' không chứa bảng nào.", icon="❌")
-                     raise IndexError
-
-                if len(table.rows) > 1:
-                    rows_to_remove_indices = range(len(table.rows) - 1, 0, -1)
-                    for i in rows_to_remove_indices:
-                        row = table.rows[i]
-                        try:
-                            tbl = row._tbl
-                            tbl.getparent().remove(tbl)
-                        except Exception as e:
-                            print(f"Lỗi khi xóa hàng {i} trong bảng mẫu: {e}")
-
-                count=0
-                for item in final_device_list:
-                    count += 1
-                    ttb_text = str(item.get('ttb', '')).strip()
-                    model_text = str(item.get('model', '')).strip()
-                    hang_text = str(item.get('hang', '')).strip()
-                    nsx_text = str(item.get('nsx', '')).strip()
-                    dvt_text = str(item.get('dvt', '')).strip()
-                    sl_text = str(int(item.get('sl', 0))).strip() if item.get('sl') is not None else ""
-                    pk_text = str(item.get('pk', '')).strip()
-
-                    device_info_text = f"{ttb_text}\n Hãng: {hang_text}\n NSX: {nsx_text}\n Model: {model_text}"
-                    if pk_text:
-                         device_info_text += f"\n{pk_text}"
-                    else:
-                         device_info_text += f"\nPhụ kiện: Không có"
-
-                    new_device = [str(count),
-                                  device_info_text,
-                                  dvt_text,
-                                  sl_text,
-                                  item['seri_text']
-                                 ]
-
-                    row = table.add_row()
-                    for i, cell_text in enumerate(new_device):
-                        if i in (0, 2, 3):
-                            ali = WD_ALIGN_PARAGRAPH.CENTER
-                        else:
-                            ali = WD_ALIGN_PARAGRAPH.LEFT
-                        try:
-                            cell = row.cells[i]
-                            cell.text = str(cell_text)
-                            for paragraph in cell.paragraphs:
-                                paragraph.alignment = ali
-                                for run in paragraph.runs:
-                                    run.font.name = font_name
-                                    run.font.size = Pt(font_size)
-                        except IndexError:
-                            st.warning(f"⚠️ Lỗi: Bảng trong file mẫu có ít hơn {len(new_device)} cột ({len(row.cells)}). Không thể điền dữ liệu đầy đủ cho hàng thiết bị thứ {count}.", icon="⚠️")
-                            print(f"Lỗi: Hàng {count} có {len(row.cells)} ô, nhưng dữ liệu có {len(new_device)} mục.")
-                            pass
-
-                # --- Tìm và thay thế placeholder cho Số hợp đồng (ĐỊNH DẠNG THEO LOẠI) ---
-                shd_value_raw = data.get('shd')
-                shd_type_raw = data.get('shd_type')
-
-                shd_value = str(shd_value_raw).strip() if shd_value_raw is not None else ''
-                shd_type = str(shd_type_raw).strip() if shd_type_raw is not None else 'Khác'
-
-                shd_value_to_replace = ''
-
-                if shd_value:
-                    shd_type_lower = shd_type.lower()
-
-                    if 'hợp đồng' in shd_type_lower or 'hd' in shd_type_lower:
-                        shd_value_to_replace = f"Dựa theo HĐ số: {shd_value}"
-                    elif 'po' in shd_type_lower or 'đề nghị' in shd_type_lower or 'denghi' in shd_type_lower or 'mã đề nghị' in shd_type_lower:
-                        shd_value_to_replace = f"Dựa theo PO: {shd_value}"
-                    else:
-                        shd_value_to_replace = f"Dựa theo số: {shd_value}"
-
-                print(f"Value to replace placeholder with: '{shd_value_to_replace}' (Derived from value: '{shd_value}', type: '{shd_type}')")
-
-
-                shd_placeholder_replaced = False
-                shd_pattern = re.compile(re.escape("shd"), re.IGNORECASE)
-
-                for paragraph in document.paragraphs:
-                     if shd_pattern.search(paragraph.text):
-                          for run in paragraph.runs:
-                               original_run_text = run.text
-                               new_run_text = shd_pattern.sub(shd_value_to_replace, original_run_text)
-
-                               if new_run_text != original_run_text:
-                                    run.text = new_run_text
-                                    shd_placeholder_replaced = True
-
-                if not shd_placeholder_replaced:
-                     st.warning("⚠️ Không tìm thấy placeholder 'shd' (hoặc 'SHD',...) trong các đoạn văn của file mẫu. Số hợp đồng sẽ không được điền vào file Word.", icon="⚠️")
-                     print("Không tìm thấy placeholder 'shd' (hoặc 'SHD',...).")
-
-                # --- KẾT THÚC LOGIC THAY THẾ PLACEHOLDER (ĐỊNH DẠNG THEO LOẠI) ---
-
-                # --- Tạo tên file đầu ra theo yêu cầu mới ---
-                # Format: {Quantity}{DeviceName}-{Quantity}{DeviceName}_{ShortCompanyName}_{SHDValuePart}
-
-                # 1. Chuỗi thông tin thiết bị (Số lượng + Tên thiết bị cho mỗi loại gộp)
-                device_info_filename_parts = []
-                for item in final_device_list:
-                    quantity = int(item.get('sl', 0))
-                    formatted_quantity = f"{quantity:02d}" if quantity >= 0 else "00"
-                    device_name = str(item.get('ttb', '')).strip()
-
-                    cleaned_device_name_part = re.sub(r'[\\/*?":<>|{}\[\]().,_]', '', device_name).strip()
-
-                    if cleaned_device_name_part:
-                         device_info_filename_parts.append(f"{formatted_quantity} {cleaned_device_name_part}")
-
-                device_info_string_for_filename = "-".join(device_info_filename_parts)
-
-                # 2. Lấy và rút gọn tên công ty (Bên giao)
-                cty_name_raw = data.get('cty', 'UnknownCompany')
-                cty_name_full = str(cty_name_raw).strip() if cty_name_raw is not None else 'UnknownCompany'
-                cleaned_cty_name = shorten_company_name(cty_name_full)
-
-                if not cleaned_cty_name:
-                    cleaned_cty_name = re.sub(r'[\\/*?":<>|{}\[\]()]', '', cty_name_full).strip(" ,.-_&")
-
-
-                # 3. Lấy giá trị SHD (chỉ phần số/mã trước dấu gạch ngang nếu có)
-                shd_value_for_filename = shd_value
-
-                shd_parts = shd_value_for_filename.split('-', 1)
-                shd_cleaned_filename_part = shd_parts[0].strip() if shd_parts and shd_parts[0].strip() else ''
-
-                shd_cleaned_filename_part = clean_filename(shd_cleaned_filename_part)
-
-
-                # 4. Kết hợp các phần và làm sạch tên file lần cuối
-                part1 = device_info_string_for_filename if device_info_string_for_filename else "ThietBi"
-                part2 = cleaned_cty_name if cleaned_cty_name else "CongTy"
-                part3 = shd_cleaned_filename_part if shd_cleaned_filename_part else "SoDinhDanh"
-
-                raw_output_filename = f"{part1}_{part2}_{part3}"
-
-                output_filename_final = clean_filename(raw_output_filename)
-
-                if not output_filename_final.lower().endswith('.docx'):
-                     output_filename = output_filename_final + '.docx'
-                else:
-                     output_filename = output_filename_final
-
-                if not output_filename or output_filename.lower() == '.docx' or len(output_filename) < (len(".docx") + 3):
-                    fallback_shd_part = shd_cleaned_filename_part if shd_cleaned_filename_part else "NoID"
-                    fallback_cty_part = cleaned_cty_name if cleaned_cty_name else "CongTy"
-                    output_filename = f"BienBanBanGiaoNoiBo_Fallback_{fallback_cty_part}_{fallback_shd_part}.docx"
-
-
-                print(f"Generated output filename: {output_filename}")
-
-                # --- KẾT THÚC TẠO TÊN FILE ĐẦU RA ---
-
-
-                byte_io = BytesIO()
-                document.save(byte_io)
-                byte_io.seek(0)
-
-                st.download_button(
-                    label="✅ Tải xuống file Word Biên bản bàn giao nội bộ",
-                    data=byte_io,
-                    file_name=output_filename,
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                )
-
-                st.success(f"🎉 Đã xử lý file PDF và tạo Biên bản bàn giao nội bộ: **{output_filename}**", icon="✅")
-
-            except Exception as e:
-                 st.error(f"❌ Đã có lỗi xảy ra trong quá trình tạo file Word: {e}", icon="❌")
-                 print(f"Lỗi xử lý Word: {e}")
-
-        elif data is not None:
-             st.warning("⚠️ Không trích xuất được danh sách thiết bị nào từ file PDF.", icon="⚠️")
-             print("Danh sách thiết bị 'ds' trống hoặc không hợp lệ.")
+        # --- Xử lý phản hồi từ AI (sau khi đã thử các model) ---
+        if data is None:
+            st.error("❌ Tất cả các model AI đã thử đều không thể trích xuất dữ liệu JSON hợp lệ. Vui lòng kiểm tra lại file đầu vào hoặc prompt.", icon="❌")
+            if response and response.text:
+                st.text_area("Phản hồi gốc cuối cùng từ AI (có thể gây lỗi):", response.text, height=200)
+        else:
+            # Call the new function to process data and generate Word doc
+            process_and_generate_word_doc(data, raw_ai_response)
 
     except Exception as e:
         # Loại bỏ lỗi "No API_KEY" khỏi thông báo lỗi chung nếu nó đã được xử lý ở trên
