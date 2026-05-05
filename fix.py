@@ -324,15 +324,27 @@ def get_api_key() -> Optional[str]:
     # Collect all available keys
     keys = []
 
-    # Environment variable (Streamlit Cloud secrets)
-    api_key = os.environ.get('GEMINI_API_KEY')
-    if api_key:
-        keys.append(api_key)
+    # Try Streamlit secrets first (for cloud deployment)
+    try:
+        import streamlit as st
+        if hasattr(st, 'secrets'):
+            for key in ['GEMINI_API_KEY', 'GEMINI_API_KEY_2', 'GEMINI_API_KEY_3',
+                       'GEMINI_API_KEY_4', 'GEMINI_API_KEY_5', 'GEMINI_API_KEY_6',
+                       'GEMINI_API_KEY_7', 'GEMINI_API_KEY_8']:
+                if key in st.secrets:
+                    val = st.secrets[key]
+                    if val and val not in keys:
+                        keys.append(val)
+    except Exception:
+        pass
 
-    # Backup keys from Streamlit secrets (GEMINI_API_KEY_2, _3, etc.)
+    # Environment variable fallback
+    api_key = os.environ.get('GEMINI_API_KEY')
+    if api_key and api_key not in keys:
+        keys.append(api_key)
     for i in range(2, 9):
         backup_key = os.environ.get(f'GEMINI_API_KEY_{i}')
-        if backup_key:
+        if backup_key and backup_key not in keys:
             keys.append(backup_key)
 
     # Config file (local development)
@@ -361,13 +373,31 @@ def rotate_api_key() -> Optional[str]:
 
     # Collect all available keys
     keys = []
+
+    # Try Streamlit secrets first (for cloud deployment)
+    try:
+        import streamlit as st
+        if hasattr(st, 'secrets'):
+            for key in ['GEMINI_API_KEY', 'GEMINI_API_KEY_2', 'GEMINI_API_KEY_3',
+                       'GEMINI_API_KEY_4', 'GEMINI_API_KEY_5', 'GEMINI_API_KEY_6',
+                       'GEMINI_API_KEY_7', 'GEMINI_API_KEY_8']:
+                if key in st.secrets:
+                    val = st.secrets[key]
+                    if val and val not in keys:
+                        keys.append(val)
+    except Exception:
+        pass
+
+    # Environment variable fallback
     api_key = os.environ.get('GEMINI_API_KEY')
-    if api_key:
+    if api_key and api_key not in keys:
         keys.append(api_key)
     for i in range(2, 9):
         backup_key = os.environ.get(f'GEMINI_API_KEY_{i}')
-        if backup_key:
+        if backup_key and backup_key not in keys:
             keys.append(backup_key)
+
+    # Config file fallback
     if os.path.exists(CONFIG_FILE_PATH):
         try:
             import configparser
@@ -378,6 +408,7 @@ def rotate_api_key() -> Optional[str]:
                 keys.append(key)
         except Exception:
             pass
+
     if not keys:
         keys = API_KEYS
 
@@ -403,19 +434,30 @@ def list_models() -> List[str]:
 
 @st.cache_resource
 def check_prerequisites() -> bool:
+    """Kiểm tra API key và file template."""
     api_key = get_api_key()
     if not api_key:
         st.error("❌ Không tìm thấy GEMINI_API_KEY.", icon="❌")
         return False
 
     if not configure_api(api_key):
-        st.error("❌ Không thể cấu hình API key.", icon="❌")
-        return False
+        # Try all available keys
+        for _ in range(8):
+            next_key = rotate_api_key()
+            if next_key and configure_api(next_key):
+                break
+        else:
+            st.error("❌ Không thể cấu hình API key.", icon="❌")
+            return False
 
-    models = list_models()
-    if not models:
-        st.error("❌ Không thể lấy danh sách models.", icon="❌")
-        return False
+    try:
+        models = list_models()
+        if not models:
+            st.error("❌ Không thể lấy danh sách models.", icon="❌")
+            return False
+    except Exception as e:
+        logger.warning(f"Could not list models: {e}")
+        # Still proceed - models filtering will handle it
 
     if not os.path.exists(TEMPLATE_FILE):
         st.error(f"❌ Thiếu file mẫu '{TEMPLATE_FILE}'", icon="❌")
