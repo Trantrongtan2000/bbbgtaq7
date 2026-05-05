@@ -321,10 +321,19 @@ def get_api_key() -> Optional[str]:
     """Get API key from environment variable (Streamlit Cloud) or config file."""
     global _current_key_idx
 
+    # Collect all available keys
+    keys = []
+
     # Environment variable (Streamlit Cloud secrets)
     api_key = os.environ.get('GEMINI_API_KEY')
     if api_key:
-        return api_key
+        keys.append(api_key)
+
+    # Backup keys from Streamlit secrets (GEMINI_API_KEY_2, _3, etc.)
+    for i in range(2, 9):
+        backup_key = os.environ.get(f'GEMINI_API_KEY_{i}')
+        if backup_key:
+            keys.append(backup_key)
 
     # Config file (local development)
     if os.path.exists(CONFIG_FILE_PATH):
@@ -333,20 +342,47 @@ def get_api_key() -> Optional[str]:
             config = configparser.ConfigParser()
             config.read(CONFIG_FILE_PATH)
             key = config['API']['GEMINI_API_KEY']
-            if key and key != 'YOUR_API_KEY_HERE':
-                return key
+            if key and key != 'YOUR_API_KEY_HERE' and key not in keys:
+                keys.append(key)
         except Exception:
             pass
 
-    # Return current key from rotation pool (fallback for development)
+    # Use indexed key from rotation pool
+    if keys:
+        return keys[_current_key_idx % len(keys)]
+
+    # Fallback to hardcoded keys
     if _current_key_idx < len(API_KEYS):
         return API_KEYS[_current_key_idx]
     return None
 
 def rotate_api_key() -> Optional[str]:
     global _current_key_idx
-    _current_key_idx = (_current_key_idx + 1) % len(API_KEYS)
-    return get_api_key()
+
+    # Collect all available keys
+    keys = []
+    api_key = os.environ.get('GEMINI_API_KEY')
+    if api_key:
+        keys.append(api_key)
+    for i in range(2, 9):
+        backup_key = os.environ.get(f'GEMINI_API_KEY_{i}')
+        if backup_key:
+            keys.append(backup_key)
+    if os.path.exists(CONFIG_FILE_PATH):
+        try:
+            import configparser
+            config = configparser.ConfigParser()
+            config.read(CONFIG_FILE_PATH)
+            key = config['API']['GEMINI_API_KEY']
+            if key and key != 'YOUR_API_KEY_HERE' and key not in keys:
+                keys.append(key)
+        except Exception:
+            pass
+    if not keys:
+        keys = API_KEYS
+
+    _current_key_idx = (_current_key_idx + 1) % len(keys)
+    return keys[_current_key_idx] if keys else None
 
 def configure_api(key: str) -> bool:
     try:
