@@ -318,14 +318,15 @@ def fill_word_template(data: Dict[str, Any], grouped_devices: List[Dict[str, Any
 # --- API CONFIG ---
 
 def get_api_key() -> Optional[str]:
+    """Get API key from environment variable (Streamlit Cloud) or config file."""
     global _current_key_idx
 
-    # Environment variable first
+    # Environment variable (Streamlit Cloud secrets)
     api_key = os.environ.get('GEMINI_API_KEY')
     if api_key:
         return api_key
 
-    # Config file
+    # Config file (local development)
     if os.path.exists(CONFIG_FILE_PATH):
         try:
             import configparser
@@ -337,7 +338,7 @@ def get_api_key() -> Optional[str]:
         except Exception:
             pass
 
-    # Return current key from rotation pool
+    # Return current key from rotation pool (fallback for development)
     if _current_key_idx < len(API_KEYS):
         return API_KEYS[_current_key_idx]
     return None
