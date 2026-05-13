@@ -13,10 +13,10 @@ from typing import List, Dict, Any, Optional
 # Try to import google.genai (new), fall back to google.generativeai (deprecated)
 try:
     from google import genai
-    USE_NEW_GENAI = True
+    from google.genai import types as genai_types
 except ImportError:
     from google import generativeai as genai
-    USE_NEW_GENAI = False
+    from google.generativeai import types as genai_types
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -34,7 +34,7 @@ SYSTEM_INSTRUCTION = (
 CONFIG_FILE_PATH = 'config.ini'
 TEMPLATE_FILE = 'bbbg.docx'
 
-DESIRED_MODELS_KEYWORDS = ['pro', 'flash']
+DESIRED_MODELS_KEYWORDS = ['gemini', 'gemma', 'flash', 'pro']
 EXCLUDE_MODELS_KEYWORDS = ['bison', 'gecko', 'embedding', 'aqa', 'vision', 'legacy']
 
 MAX_FILENAME_LEN = 200
@@ -45,14 +45,7 @@ DEFAULT_FONT_SIZE = 12
 
 # API Keys for rotation
 API_KEYS = [
-    "AIzaSyBy5gOHrQHDhHCtZL-weSyXioO-E6RcHIc",
-    "AIzaSyCF93dqSNo-_T2e1D1J1Xt5EQ_E2nhkgds",
-    "AIzaSyA5HIlH7ZszteYrYLB7iUiGWqVMyQlSjGo",
-    "AIzaSyAF4NcwyjqwE53ggvLrkwDqv-3R8ajDiw4",
-    "AIzaSyDZsGzsWB6upwgVsJZpQO2koCLEfKs55Xg",
-    "AIzaSyDqqs4xyPy6wmBqhAsueqgQ93q7AXGgZaM",
-    "AIzaSyDjbRDnbJQdqS_P-vgy75t_JTjnkD27cHY",
-    "AIzaSyDRk4sb6syECGuBWmQBTcTFSl_Q25M1hTk",
+    "AIzaSyBlg4BpQn9UdydetlS3ycHdkX4i231k7Yg",
 ]
 _current_key_idx = 0
 
@@ -417,10 +410,7 @@ def rotate_api_key() -> Optional[str]:
 
 def configure_api(key: str) -> bool:
     try:
-        if USE_NEW_GENAI:
-            genai.configure(api_key=key)
-        else:
-            genai.configure(api_key=key)
+        genai.configure(api_key=key)
         return True
     except Exception as e:
         logger.warning(f"Failed to configure API key: {e}")
@@ -453,11 +443,9 @@ def check_prerequisites() -> bool:
     try:
         models = list_models()
         if not models:
-            st.error("❌ Không thể lấy danh sách models.", icon="❌")
-            return False
+            logger.warning("Could not list models, using fallback model list")
     except Exception as e:
         logger.warning(f"Could not list models: {e}")
-        # Still proceed - models filtering will handle it
 
     if not os.path.exists(TEMPLATE_FILE):
         st.error(f"❌ Thiếu file mẫu '{TEMPLATE_FILE}'", icon="❌")
@@ -467,26 +455,47 @@ def check_prerequisites() -> bool:
 
 @st.cache_data
 def get_filtered_models() -> List[str]:
+    logger.info("Getting filtered models...")
     models = list_models()
+    logger.info(f"list_models returned {len(models)} models")
     found = []
     for m in models:
         name = m.lower()
         if any(k in name for k in DESIRED_MODELS_KEYWORDS) and not any(k in name for k in EXCLUDE_MODELS_KEYWORDS):
             found.append(m)
 
+    # Fallback to known working models if none found
+    if not found:
+        logger.warning("No models found from API, using fallback list")
+        found = [
+            'gemini-3-flash',
+            'gemini-3.1-flash-lite',
+            'gemini-2.5-flash',
+            'gemini-2.5-flash-lite',
+            'gemini-2.0-flash',
+            'gemma-4-31b-it',
+            'gemma-4-26b-it',
+            'gemini-2.5-pro',
+        ]
+
     def priority(nm):
         n = nm.lower()
-        if "gemini-3-pro-preview" in n: return 0
-        if "gemini-2.5-pro" in n: return 1
-        if "gemini-2.5-flash" in n: return 2
-        if "gemini-2.5-flash-lite" in n: return 3
+        # Higher RPD models first (gemini-3.1-flash-lite has 500 RPD)
+        if "gemini-3.1-flash-lite" in n: return 0
+        if "gemini-2.5-flash-lite" in n: return 1
+        if "gemini-3-flash" in n: return 2
+        if "gemini-2.5-flash" in n: return 3
         if "gemini-2.0-flash" in n: return 4
-        return 5
+        if "gemma-4-31b" in n: return 5
+        if "gemma-4-26b" in n: return 6
+        if "gemini-2.5-pro" in n: return 7
+        return 8
 
     found.sort(key=priority)
+    logger.info(f"Returning models: {found}")
     return found
 
-def call_gemini_vision_api(uploaded_file_part, prompt, model_list: List[str]) -> Optional[Dict]:
+def call_gemini_vision_api(uploaded_file_bytes: bytes, mime_type: str, prompt: str, model_list: List[str]) -> Optional[Dict]:
     if not model_list:
         st.error("Không có model nào khả dụng.", icon="❌")
         return None
@@ -494,27 +503,76 @@ def call_gemini_vision_api(uploaded_file_part, prompt, model_list: List[str]) ->
     global _current_key_idx
     last_error = None
 
-    # Try each key
-    for key_idx in range(len(API_KEYS)):
+    # Get actual count of available keys
+    available_keys = []
+    try:
+        import streamlit as st
+        if hasattr(st, 'secrets'):
+            for key in ['GEMINI_API_KEY', 'GEMINI_API_KEY_2', 'GEMINI_API_KEY_3',
+                       'GEMINI_API_KEY_4', 'GEMINI_API_KEY_5', 'GEMINI_API_KEY_6',
+                       'GEMINI_API_KEY_7', 'GEMINI_API_KEY_8']:
+                if key in st.secrets:
+                    val = st.secrets[key]
+                    if val and val not in available_keys:
+                        available_keys.append(val)
+    except Exception:
+        pass
+
+    env_key = os.environ.get('GEMINI_API_KEY')
+    if env_key and env_key not in available_keys:
+        available_keys.append(env_key)
+    for i in range(2, 9):
+        backup_key = os.environ.get(f'GEMINI_API_KEY_{i}')
+        if backup_key and backup_key not in available_keys:
+            available_keys.append(backup_key)
+
+    if os.path.exists(CONFIG_FILE_PATH):
+        try:
+            import configparser
+            config = configparser.ConfigParser()
+            config.read(CONFIG_FILE_PATH)
+            key = config['API']['GEMINI_API_KEY']
+            if key and key != 'YOUR_API_KEY_HERE' and key not in available_keys:
+                available_keys.append(key)
+        except Exception:
+            pass
+
+    if not available_keys:
+        available_keys = API_KEYS
+
+    key_count = len(available_keys)
+
+    # Collect all unique models across all keys for comprehensive retry
+    all_models = []
+    for key in available_keys:
+        all_models.extend(model_list)
+    max_attempts = len(all_models) + key_count  # Model attempts + key rotations
+
+    attempt = 0
+    while attempt < max_attempts:
         api_key = get_api_key()
         if not api_key:
             break
 
         if not configure_api(api_key):
             rotate_api_key()
+            attempt += 1
             continue
 
-        # Try each model with this key
         for model_name in model_list:
             try:
                 with st.spinner(f"✨ Đang dùng model: {model_name}..."):
+                    file_part = genai_types.BlobDict(mime_type=mime_type, data=uploaded_file_bytes)
                     model = genai.GenerativeModel(model_name=model_name, system_instruction=SYSTEM_INSTRUCTION)
-                    response = model.generate_content([uploaded_file_part, prompt])
+                    response = model.generate_content([file_part, prompt])
 
                     text = response.text.strip()
-                    if text.startswith("```json"): text = text[7:]
-                    elif text.startswith("```"): text = text[3:]
-                    if text.endswith("```"): text = text[:-3]
+                    if text.startswith("```json"):
+                        text = text[7:]
+                    elif text.startswith("```"):
+                        text = text[3:]
+                    if text.endswith("```"):
+                        text = text[:-3]
 
                     data = json.loads(text.strip())
                     st.success(f"✅ Thành công với model: {model_name}")
@@ -528,11 +586,19 @@ def call_gemini_vision_api(uploaded_file_part, prompt, model_list: List[str]) ->
 
             except Exception as e:
                 err_str = str(e)
-                logger.warning(f"Model {model_name} failed: {err_str}")
+                err_type = type(e).__name__
+                logger.warning(f"Model {model_name} failed ({err_type}): {err_str}")
 
-                # Rotate key on auth errors or quota
-                if any(x in err_str for x in ["API_KEY", "UNAUTHORIZED", "INVALID", "quota", "limit", "429"]):
+                # Check for quota/key errors
+                quota_errors = ["API_KEY", "UNAUTHORIZED", "INVALID", "quota", "limit", "429",
+                               "RESOURCE_EXHAUSTED", "ResourceExhausted", "leaked", "PERMISSION_DENIED"]
+                if any(x in err_str.upper() for x in quota_errors) or "429" in err_str:
+                    logger.warning(f"Quota/key error detected, rotating to next key...")
                     rotate_api_key()
+                    attempt += 1
+                    # Brief pause to avoid hammering
+                    import time
+                    time.sleep(0.5)
                     break
 
                 last_error = err_str
@@ -540,6 +606,8 @@ def call_gemini_vision_api(uploaded_file_part, prompt, model_list: List[str]) ->
 
     if last_error:
         st.error(f"❌ Tất cả model và key đều thất bại: {last_error}", icon="❌")
+    else:
+        st.error("❌ Không thể kết nối API. Vui lòng kiểm tra API key và thử lại.", icon="❌")
     return None
 
 # --- MAIN ---
@@ -571,6 +639,8 @@ Hãy trích xuất thông tin từ Biên bản bàn giao và trả về JSON h�
 2. pk KHÔNG được gộp thành một chuỗi dài
 3. Nếu không có thông tin, trả về null
 4. KHÔNG có Markdown code block, chỉ trả về JSON thuần
+5. Đọc CHÍNH XÁC model/model number - cẩn thận với các số giống nhau (VD: 0/O, 1/I/l, 2/Z, 5/S, 6/G, 8/B)
+6. Nếu không chắc chắn, ghi lại như trong tài liệu
 """
 
 def main():
@@ -614,7 +684,8 @@ def main():
         mime = 'application/pdf' if uploaded_file.name.lower().endswith('.pdf') else 'image/jpeg'
 
         data = call_gemini_vision_api(
-            {'mime_type': mime, 'data': file_bytes},
+            file_bytes,
+            mime,
             PROMPT_TEMPLATE,
             available_models
         )

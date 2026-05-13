@@ -2,6 +2,9 @@
 config.ini
 .env
 *.env
+secrets_streamlit.toml
+secrets_template.toml
+secrets_template.txt
 
 # Python
 __pycache__/
