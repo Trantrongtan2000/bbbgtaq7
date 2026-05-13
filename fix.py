@@ -11,12 +11,28 @@ from docx.shared import Pt
 from typing import List, Dict, Any, Optional
 
 # Try to import google.genai (new), fall back to google.generativeai (deprecated)
-try:
-    from google import genai
-    from google.genai import types as genai_types
-except ImportError:
-    from google import generativeai as genai
-    from google.generativeai import types as genai_types
+GENAI_CLIENT = None
+
+def get_genai_client(api_key: str):
+    """Get or create the GenAI client. Supports both old and new SDK."""
+    global GENAI_CLIENT
+    if GENAI_CLIENT is not None:
+        return GENAI_CLIENT
+    try:
+        # Try new SDK first
+        from google import genai
+        GENAI_CLIENT = genai.Client(api_key=api_key)
+        return GENAI_CLIENT
+    except (ImportError, AttributeError):
+        pass
+    try:
+        # Fall back to old SDK
+        from google import generativeai as genai
+        genai.configure(api_key=api_key)
+        GENAI_CLIENT = genai
+        return GENAI_CLIENT
+    except (ImportError, AttributeError):
+        return None
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -409,16 +425,26 @@ def rotate_api_key() -> Optional[str]:
     return keys[_current_key_idx] if keys else None
 
 def configure_api(key: str) -> bool:
+    """Configure the GenAI client with the given API key."""
+    global GENAI_CLIENT
+    GENAI_CLIENT = None  # Reset to force re-initialization
     try:
-        genai.configure(api_key=key)
-        return True
+        client = get_genai_client(key)
+        return client is not None
     except Exception as e:
         logger.warning(f"Failed to configure API key: {e}")
         return False
 
 def list_models() -> List[str]:
     try:
-        return [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+        client = get_genai_client(get_api_key() or API_KEYS[0])
+        if client is None:
+            return []
+        # New SDK: client.models.list()
+        if hasattr(client, 'models'):
+            return [m.name for m in client.models.list() if 'generateContent' in getattr(m, 'supported_generation_methods', [])]
+        # Old SDK: genai.list_models()
+        return [m.name for m in client.list_models() if 'generateContent' in m.supported_generation_methods]
     except Exception:
         return []
 
@@ -562,11 +588,47 @@ def call_gemini_vision_api(uploaded_file_bytes: bytes, mime_type: str, prompt: s
         for model_name in model_list:
             try:
                 with st.spinner(f"✨ Đang dùng model: {model_name}..."):
-                    file_part = genai_types.BlobDict(mime_type=mime_type, data=uploaded_file_bytes)
-                    model = genai.GenerativeModel(model_name=model_name, system_instruction=SYSTEM_INSTRUCTION)
-                    response = model.generate_content([file_part, prompt])
+                    # Try new SDK first
+                    try:
+                        client = get_genai_client(get_api_key() or available_keys[0])
+                        if client is None:
+                            continue
+                        
+                        # New SDK path
+                        from google.genai import types as genai_types
+                        from google.genai.types import PartDict
+                        
+                        file_part = PartDict(mime_type=mime_type, binary=uploaded_file_bytes)
+                        model = client.models.get(model_name=model_name)
+                        
+                        # Build messages for new SDK
+                        contents = [
+                            {
+                                "role": "user",
+                                "parts": [
+                                    {"text": prompt},
+                                    file_part
+                                ]
+                            }
+                        ]
+                        response = client.models.generate_content(
+                            model=model_name,
+                            contents=contents,
+                            config=types.GenerateContentConfig(
+                                system_instruction=SYSTEM_INSTRUCTION
+                            )
+                        )
+                        text = response.text.strip()
+                    except (ImportError, AttributeError):
+                        # Fall back to old SDK
+                        from google.generativeai import types as genai_types_old
+                        from google.generativeai import GenerativeModel
+                        
+                        file_part = genai_types_old.Blob(mime_type=mime_type, data=uploaded_file_bytes)
+                        model = GenerativeModel(model_name=model_name, system_instruction=SYSTEM_INSTRUCTION)
+                        response = model.generate_content([file_part, prompt])
+                        text = response.text.strip()
 
-                    text = response.text.strip()
                     if text.startswith("```json"):
                         text = text[7:]
                     elif text.startswith("```"):
