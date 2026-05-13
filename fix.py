@@ -588,20 +588,19 @@ def call_gemini_vision_api(uploaded_file_bytes: bytes, mime_type: str, prompt: s
         for model_name in model_list:
             try:
                 with st.spinner(f"✨ Đang dùng model: {model_name}..."):
-                    # Try new SDK first
+# Try new SDK first
                     try:
                         client = get_genai_client(get_api_key() or available_keys[0])
                         if client is None:
                             continue
-                        
+
                         # New SDK path
                         from google.genai import types as genai_types
                         from google.genai.types import PartDict
                         
                         file_part = PartDict(mime_type=mime_type, binary=uploaded_file_bytes)
-                        model = client.models.get(model_name=model_name)
                         
-                        # Build messages for new SDK
+                        # Build contents - use positional arg for model name
                         contents = [
                             {
                                 "role": "user",
@@ -611,10 +610,12 @@ def call_gemini_vision_api(uploaded_file_bytes: bytes, mime_type: str, prompt: s
                                 ]
                             }
                         ]
+                        
+                        # New SDK uses model= as positional, not model_name=
                         response = client.models.generate_content(
                             model=model_name,
                             contents=contents,
-                            config=types.GenerateContentConfig(
+                            config=genai_types.GenerateContentConfig(
                                 system_instruction=SYSTEM_INSTRUCTION
                             )
                         )
