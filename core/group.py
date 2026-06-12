@@ -9,23 +9,35 @@ MAX_SERI_DISPLAY = 100
 
 
 def _make_pk_key(pk: Any) -> str:
-    """Create a hashable key from accessories list."""
+    """Create a hashable key from accessories list.
+
+    Returns a string key for grouping. Handles None, empty lists,
+    and serialization failures gracefully.
+    """
     if pk is None:
         return "None"
     if isinstance(pk, list):
-        return json.dumps(pk, ensure_ascii=False, sort_keys=True) if pk else "[]"
+        if not pk:
+            return "[]"
+        try:
+            return json.dumps(pk, ensure_ascii=False, sort_keys=True)
+        except (TypeError, ValueError):
+            return str(pk)
     return str(pk).strip() or "None"
 
 
 def _make_group_key(device: Device) -> tuple:
-    """Create a grouping key from device attributes."""
+    """Create a grouping key from device attributes.
+
+    Uses getattr for safety in case Device structure changes.
+    """
     return (
-        standardize_string(device.ttb),
-        device.model,
-        device.hang,
-        device.nsx,
-        device.dvt,
-        _make_pk_key(device.pk),
+        standardize_string(getattr(device, 'ttb', '')),
+        getattr(device, 'model', ''),
+        getattr(device, 'hang', ''),
+        getattr(device, 'nsx', ''),
+        getattr(device, 'dvt', ''),
+        _make_pk_key(getattr(device, 'pk', None)),
     )
 
 
@@ -65,7 +77,11 @@ def group_devices(devices: List[Device]) -> List[GroupedDevice]:
 
 
 def _format_seri(seri_set: set) -> str:
-    """Format serial numbers for display."""
+    """Format serial numbers for display.
+
+    Returns formatted string with up to MAX_SERI_DISPLAY serial numbers.
+    Appends remaining count if limit exceeded.
+    """
     unique_seri = sorted(seri_set) if seri_set else []
     display_seri = unique_seri[:MAX_SERI_DISPLAY]
     text = f"Số seri: {', '.join(display_seri)}"
