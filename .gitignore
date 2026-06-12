@@ -1,0 +1,30 @@
+# Environment and secrets
+config.ini
+.env
+*.env
+secrets_streamlit.toml
+secrets_template.toml
+secrets_template.txt
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+*.so
+.pytest_cache/
+*.egg-info/
+.eggs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
