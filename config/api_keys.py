@@ -8,17 +8,7 @@ logger = get_logger('config.api_keys')
 
 CONFIG_FILE_PATH = 'config.ini'
 
-HARDCODED_KEYS = [
-    "O8AnwcZsgutYi9t9PLBbEJhKFrzfrQD4",
-    "vM0BbwYmhErRM7H5N9lvgsKdIzyqmiGJ",
-    "yjxDmArvHwkxluiONEn1ekD8a5FLrfxU",
-    "OZwB48OQt5Y91GUvJTmvkHfPJbUmE62A",
-    "lgPhVCV6OPMODzYpVcxNJG9k991dlcRH",
-    "05Kswrb2BVR0aUy7uRLNfKgX7Zz7ebrn",
-    "LqjEj82rUqLqeLXdM851dmjI6LRQj0Jl",
-    "sI3RS0lsdjfhnButOag8xnXolkX0W3xT",
-    "4VqGdIR9ipk0WRFTkzzQSPgeglPs41Rd",
-]
+HARDCODED_KEYS = []
 
 
 def _collect_keys() -> list[str]:

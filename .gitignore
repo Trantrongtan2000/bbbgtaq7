@@ -5,6 +5,7 @@ config.ini
 secrets_streamlit.toml
 secrets_template.toml
 secrets_template.txt
+.streamlit/secrets.toml
 
 # Python
 __pycache__/
