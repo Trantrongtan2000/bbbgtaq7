@@ -8,8 +8,6 @@ logger = get_logger('config.api_keys')
 
 CONFIG_FILE_PATH = 'config.ini'
 
-HARDCODED_KEYS = []
-
 
 def _collect_keys() -> list[str]:
     """Collect all available API keys from all sources."""
@@ -44,11 +42,6 @@ def _collect_keys() -> list[str]:
                 keys.append(key)
         except Exception:
             pass
-
-    # 4. Hardcoded fallbacks
-    for key in HARDCODED_KEYS:
-        if key not in keys:
-            keys.append(key)
 
     return keys
 
