@@ -66,18 +66,37 @@ def main():
 
     st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
-    .stApp {
-        font-family: 'Inter', -apple-system, sans-serif;
+    /* Remove all dark backgrounds */
+    .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"],
+    .main .block-container, section[data-testid="stSidebar"] > div {
+        background-color: #ffffff !important;
     }
 
+    /* Header bar */
+    header[data-testid="stHeader"] {
+        background-color: #ffffff !important;
+    }
+
+    /* Sidebar */
+    section[data-testid="stSidebar"] {
+        background-color: #f8fafc !important;
+    }
+
+    /* Main content */
+    .main .block-container {
+        padding-top: 2rem !important;
+        max-width: 640px !important;
+    }
+
+    /* Typography */
     h1 {
-        font-family: 'Inter', sans-serif;
+        font-family: 'Inter', -apple-system, sans-serif;
         font-weight: 700;
         letter-spacing: -0.03em;
-        color: #1a1a2e;
-        font-size: 2.2rem !important;
+        color: #0f172a !important;
+        font-size: 1.8rem !important;
     }
 
     .stMarkdown p {
@@ -85,76 +104,77 @@ def main():
         line-height: 1.6;
     }
 
+    /* File uploader */
     .stFileUploader {
         border: 1.5px solid #e2e8f0;
         border-radius: 12px;
         padding: 1.5rem;
-        transition: border-color 0.2s ease;
+        background: #fafbfc;
     }
 
     .stFileUploader:hover {
         border-color: #3b82f6;
     }
 
+    /* Download button */
     .stDownloadButton > button {
-        background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+        background: #0f172a;
         color: white;
         font-weight: 600;
         border: none;
         border-radius: 10px;
         padding: 0.75rem 2rem;
-        letter-spacing: -0.01em;
-        transition: all 0.2s ease;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        transition: all 0.15s ease;
     }
 
     .stDownloadButton > button:hover {
+        background: #1e293b;
         transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(30, 41, 59, 0.25);
+        box-shadow: 0 4px 12px rgba(15, 23, 42, 0.2);
     }
 
     .stDownloadButton > button:active {
         transform: translateY(0);
     }
 
+    /* Alerts */
     [data-testid="stSuccess"] {
-        background-color: #f0fdf4;
-        border: 1px solid #bbf7d0;
-        border-radius: 10px;
-        color: #166534;
+        background-color: #f0fdf4 !important;
+        border: 1px solid #bbf7d0 !important;
+        border-radius: 10px !important;
+        color: #166534 !important;
     }
 
     [data-testid="stError"] {
-        background-color: #fef2f2;
-        border: 1px solid #fecaca;
-        border-radius: 10px;
-        color: #991b1b;
+        background-color: #fef2f2 !important;
+        border: 1px solid #fecaca !important;
+        border-radius: 10px !important;
+        color: #991b1b !important;
     }
 
     [data-testid="stInfo"] {
-        background-color: #f8fafc;
-        border: 1px solid #e2e8f0;
-        border-radius: 10px;
-        color: #475569;
+        background-color: #f8fafc !important;
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 10px !important;
+        color: #475569 !important;
     }
 
-    .section-divider {
+    /* Spinner */
+    [data-testid="stSpinner"] {
+        color: #64748b;
+    }
+
+    /* Divider */
+    hr {
         border: none;
         border-top: 1px solid #f1f5f9;
-        margin: 2rem 0;
     }
     </style>
     """, unsafe_allow_html=True)
 
     st.title("Biên bản Bàn giao")
 
-    st.markdown("""
-    <div style="max-width: 480px;">
-        <p style="font-size: 1rem; color: #64748b; margin-bottom: 0;">
-            Tải lên file PDF hoặc ảnh từ Biên bản bàn giao để tạo file Word tự động.
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown("Tải lên file PDF hoặc ảnh từ Biên bản bàn giao để tạo file Word tự động.")
 
     if not check_prerequisites():
         st.stop()
@@ -164,26 +184,19 @@ def main():
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        padding: 8px 14px;
+        padding: 6px 12px;
         background: #f0fdf4;
         border: 1px solid #bbf7d0;
-        border-radius: 8px;
-        font-size: 0.875rem;
+        border-radius: 6px;
+        font-size: 0.85rem;
         color: #166534;
-        font-weight: 500;
     ">
-        <span style="
-            width: 8px;
-            height: 8px;
-            background: #22c55e;
-            border-radius: 50%;
-            display: inline-block;
-        "></span>
+        <span style="width: 7px; height: 7px; background: #22c55e; border-radius: 50%; display: inline-block;"></span>
         Mistral OCR sẵn sàng &middot; {pool.size} key
     </div>
     """, unsafe_allow_html=True)
 
-    st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
+    st.markdown("---")
 
     uploaded_file = st.file_uploader(
         "Chọn file",
@@ -196,30 +209,26 @@ def main():
         <div style="
             display: flex;
             align-items: center;
-            gap: 10px;
-            padding: 12px 16px;
+            gap: 12px;
+            padding: 14px 16px;
             background: #f8fafc;
             border: 1px solid #e2e8f0;
             border-radius: 10px;
             margin-bottom: 1rem;
         ">
             <div style="
-                width: 36px;
-                height: 36px;
+                width: 40px;
+                height: 40px;
                 background: #f1f5f9;
-                border-radius: 8px;
+                border-radius: 10px;
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                font-size: 1rem;
+                font-size: 1.1rem;
             ">📄</div>
             <div>
-                <div style="font-weight: 500; color: #1e293b; font-size: 0.9rem;">
-                    {uploaded_file.name}
-                </div>
-                <div style="font-size: 0.8rem; color: #94a3b8; font-family: 'JetBrains Mono', monospace;">
-                    Đang xử lý...
-                </div>
+                <div style="font-weight: 500; color: #1e293b; font-size: 0.9rem;">{uploaded_file.name}</div>
+                <div style="font-size: 0.8rem; color: #94a3b8;">Đang xử lý...</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -240,17 +249,13 @@ def main():
             st.markdown("""
             <div style="
                 padding: 1rem 1.25rem;
-                background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%);
+                background: #f0fdf4;
                 border: 1px solid #bbf7d0;
-                border-radius: 12px;
+                border-radius: 10px;
                 margin-bottom: 1rem;
             ">
-                <div style="font-weight: 600; color: #166534; font-size: 0.95rem; margin-bottom: 4px;">
-                    Trích xuất thành công
-                </div>
-                <div style="font-size: 0.85rem; color: #15803d;">
-                    File Word đã sẵn sàng tải xuống.
-                </div>
+                <div style="font-weight: 600; color: #166534; font-size: 0.9rem;">Trích xuất thành công</div>
+                <div style="font-size: 0.85rem; color: #15803d; margin-top: 2px;">File Word đã sẵn sàng tải xuống.</div>
             </div>
             """, unsafe_allow_html=True)
 
@@ -266,14 +271,10 @@ def main():
                 padding: 1rem 1.25rem;
                 background: #fef2f2;
                 border: 1px solid #fecaca;
-                border-radius: 12px;
+                border-radius: 10px;
             ">
-                <div style="font-weight: 600; color: #991b1b; font-size: 0.95rem; margin-bottom: 4px;">
-                    Không trích xuất được
-                </div>
-                <div style="font-size: 0.85rem; color: #b91c1c;">
-                    Vui lòng thử lại với file khác hoặc kiểm tra chất lượng ảnh.
-                </div>
+                <div style="font-weight: 600; color: #991b1b; font-size: 0.9rem;">Không trích xuất được</div>
+                <div style="font-size: 0.85rem; color: #b91c1c; margin-top: 2px;">Vui lòng thử lại với file khác hoặc kiểm tra chất lượng ảnh.</div>
             </div>
             """, unsafe_allow_html=True)
 
