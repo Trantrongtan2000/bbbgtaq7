@@ -46,13 +46,12 @@ Hãy trích xuất thông tin từ Biên bản bàn giao và trả về JSON h�
 
 @st.cache_resource
 def check_prerequisites() -> bool:
-    """Check API key availability and template file existence."""
     if pool.size == 0:
-        st.error("❌ Không tìm thấy MISTRAL_API_KEY.", icon="❌")
+        st.error("Không tìm thấy MISTRAL_API_KEY.")
         return False
 
     if not os.path.exists('bbbg.docx'):
-        st.error("❌ Thiếu file mẫu 'bbbg.docx'", icon="❌")
+        st.error("Thiếu file mẫu 'bbbg.docx'")
         return False
 
     return True
@@ -60,40 +59,175 @@ def check_prerequisites() -> bool:
 
 def main():
     st.set_page_config(
-        page_title="Chuyển đổi Bàn giao",
-        page_icon="📋",
+        page_title="Bien ban Ban giao",
+        page_icon="📄",
         layout="centered"
     )
 
     st.markdown("""
     <style>
-    .stFileUploader { border: 2px dashed #004aad; padding: 1rem; border-radius: 0.5rem; }
-    .stDownloadButton > button { background-color: #4CAF50; color: white; font-weight: bold; }
-    h1 { color: #004aad; text-align: center; }
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+    .stApp {
+        font-family: 'Inter', -apple-system, sans-serif;
+    }
+
+    h1 {
+        font-family: 'Inter', sans-serif;
+        font-weight: 700;
+        letter-spacing: -0.03em;
+        color: #1a1a2e;
+        font-size: 2.2rem !important;
+    }
+
+    .stMarkdown p {
+        color: #64748b;
+        line-height: 1.6;
+    }
+
+    .stFileUploader {
+        border: 1.5px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 1.5rem;
+        transition: border-color 0.2s ease;
+    }
+
+    .stFileUploader:hover {
+        border-color: #3b82f6;
+    }
+
+    .stDownloadButton > button {
+        background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+        color: white;
+        font-weight: 600;
+        border: none;
+        border-radius: 10px;
+        padding: 0.75rem 2rem;
+        letter-spacing: -0.01em;
+        transition: all 0.2s ease;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .stDownloadButton > button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(30, 41, 59, 0.25);
+    }
+
+    .stDownloadButton > button:active {
+        transform: translateY(0);
+    }
+
+    [data-testid="stSuccess"] {
+        background-color: #f0fdf4;
+        border: 1px solid #bbf7d0;
+        border-radius: 10px;
+        color: #166534;
+    }
+
+    [data-testid="stError"] {
+        background-color: #fef2f2;
+        border: 1px solid #fecaca;
+        border-radius: 10px;
+        color: #991b1b;
+    }
+
+    [data-testid="stInfo"] {
+        background-color: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        color: #475569;
+    }
+
+    .section-divider {
+        border: none;
+        border-top: 1px solid #f1f5f9;
+        margin: 2rem 0;
+    }
     </style>
     """, unsafe_allow_html=True)
 
-    st.title("📋 Chuyển đổi Biên bản Bàn giao")
-    st.markdown("Tải lên file PDF hoặc ảnh từ Biên bản bàn giao để tạo file Word")
+    st.title("Bien ban Ban giao")
+
+    st.markdown("""
+    <div style="max-width: 480px;">
+        <p style="font-size: 1rem; color: #64748b; margin-bottom: 0;">
+            Tai len file PDF hoac anh tu Bien ban ban giao de tao file Word tu dong.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
 
     if not check_prerequisites():
         st.stop()
 
-    st.success(f"✅ Đã kết nối Mistral OCR! ({pool.size} API key)")
+    st.markdown(f"""
+    <div style="
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 14px;
+        background: #f0fdf4;
+        border: 1px solid #bbf7d0;
+        border-radius: 8px;
+        font-size: 0.875rem;
+        color: #166534;
+        font-weight: 500;
+    ">
+        <span style="
+            width: 8px;
+            height: 8px;
+            background: #22c55e;
+            border-radius: 50%;
+            display: inline-block;
+        "></span>
+        Mistral OCR san sang &middot; {pool.size} key
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
 
     uploaded_file = st.file_uploader(
-        "📁 Chọn file (PDF/PNG/JPG)",
+        "Chon file",
         type=["pdf", "jpg", "png"],
-        help="Hỗ trợ định dạng PDF, PNG, JPG"
+        help="Ho tro dinh dang PDF, PNG, JPG"
     )
 
     if uploaded_file:
-        st.info(f"📥 Đang xử lý: **{uploaded_file.name}**", icon="⏳")
+        st.markdown(f"""
+        <div style="
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 16px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            margin-bottom: 1rem;
+        ">
+            <div style="
+                width: 36px;
+                height: 36px;
+                background: #f1f5f9;
+                border-radius: 8px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 1rem;
+            ">📄</div>
+            <div>
+                <div style="font-weight: 500; color: #1e293b; font-size: 0.9rem;">
+                    {uploaded_file.name}
+                </div>
+                <div style="font-size: 0.8rem; color: #94a3b8; font-family: 'JetBrains Mono', monospace;">
+                    Dang xu ly...
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
-        file_bytes = uploaded_file.getvalue()
-        mime = 'application/pdf' if uploaded_file.name.lower().endswith('.pdf') else 'image/jpeg'
-
-        data = extract_from_image(file_bytes, mime, PROMPT_TEMPLATE)
+        with st.spinner("Dang trich xuat du lieu..."):
+            file_bytes = uploaded_file.getvalue()
+            mime = 'application/pdf' if uploaded_file.name.lower().endswith('.pdf') else 'image/jpeg'
+            data = extract_from_image(file_bytes, mime, PROMPT_TEMPLATE)
 
         if data and 'ds' in data:
             data = convert_none_to_empty_string(data)
@@ -103,15 +237,45 @@ def main():
             filename = generate_filename(data, grouped)
             word_io = fill_word_template(data, grouped)
 
+            st.markdown("""
+            <div style="
+                padding: 1rem 1.25rem;
+                background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%);
+                border: 1px solid #bbf7d0;
+                border-radius: 12px;
+                margin-bottom: 1rem;
+            ">
+                <div style="font-weight: 600; color: #166534; font-size: 0.95rem; margin-bottom: 4px;">
+                    Trich xuat thanh cong
+                </div>
+                <div style="font-size: 0.85rem; color: #15803d;">
+                    File Word da san sang tai xuong.
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
             st.download_button(
-                "⬇️ Tải xuống file Word",
+                "Tai file Word",
                 word_io,
                 filename,
                 "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             )
-            st.success("✅ Hoàn thành! File Word đã sẵn sàng tải xuống.", icon="🎉")
         else:
-            st.error("❌ Không trích xuất được dữ liệu từ file. Vui lòng thử file khác.", icon="❌")
+            st.markdown("""
+            <div style="
+                padding: 1rem 1.25rem;
+                background: #fef2f2;
+                border: 1px solid #fecaca;
+                border-radius: 12px;
+            ">
+                <div style="font-weight: 600; color: #991b1b; font-size: 0.95rem; margin-bottom: 4px;">
+                    Khong trich xuat duoc
+                </div>
+                <div style="font-size: 0.85rem; color: #b91c1c;">
+                    Vui long thu lai voi file khac hoac kiem tra chat luong anh.
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
 
 
 if __name__ == "__main__":
