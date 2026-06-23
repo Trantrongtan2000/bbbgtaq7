@@ -68,20 +68,20 @@ def main():
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
-    /* Remove all dark backgrounds */
+    /* Dark theme */
     .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"],
     .main .block-container, section[data-testid="stSidebar"] > div {
-        background-color: #ffffff !important;
+        background-color: #0a0a0a !important;
     }
 
     /* Header bar */
     header[data-testid="stHeader"] {
-        background-color: #ffffff !important;
+        background-color: #0a0a0a !important;
     }
 
     /* Sidebar */
     section[data-testid="stSidebar"] {
-        background-color: #f8fafc !important;
+        background-color: #111111 !important;
     }
 
     /* Main content */
@@ -95,21 +95,21 @@ def main():
         font-family: 'Inter', -apple-system, sans-serif;
         font-weight: 700;
         letter-spacing: -0.03em;
-        color: #0f172a !important;
+        color: #f5f5f5 !important;
         font-size: 1.8rem !important;
     }
 
     .stMarkdown p {
-        color: #64748b;
+        color: #a0a0a0;
         line-height: 1.6;
     }
 
     /* File uploader */
     .stFileUploader {
-        border: 1.5px solid #e2e8f0;
+        border: 1.5px solid #333333;
         border-radius: 12px;
         padding: 1.5rem;
-        background: #fafbfc;
+        background: #141414;
     }
 
     .stFileUploader:hover {
@@ -118,7 +118,7 @@ def main():
 
     /* Download button */
     .stDownloadButton > button {
-        background: #0f172a;
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
         color: white;
         font-weight: 600;
         border: none;
@@ -128,9 +128,9 @@ def main():
     }
 
     .stDownloadButton > button:hover {
-        background: #1e293b;
+        background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
         transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(15, 23, 42, 0.2);
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
     }
 
     .stDownloadButton > button:active {
@@ -139,35 +139,55 @@ def main():
 
     /* Alerts */
     [data-testid="stSuccess"] {
-        background-color: #f0fdf4 !important;
-        border: 1px solid #bbf7d0 !important;
+        background-color: #0d2818 !important;
+        border: 1px solid #166534 !important;
         border-radius: 10px !important;
-        color: #166534 !important;
+        color: #4ade80 !important;
     }
 
     [data-testid="stError"] {
-        background-color: #fef2f2 !important;
-        border: 1px solid #fecaca !important;
+        background-color: #2d1215 !important;
+        border: 1px solid #991b1b !important;
         border-radius: 10px !important;
-        color: #991b1b !important;
+        color: #f87171 !important;
     }
 
     [data-testid="stInfo"] {
-        background-color: #f8fafc !important;
-        border: 1px solid #e2e8f0 !important;
+        background-color: #141414 !important;
+        border: 1px solid #333333 !important;
         border-radius: 10px !important;
-        color: #475569 !important;
+        color: #a0a0a0 !important;
     }
 
     /* Spinner */
     [data-testid="stSpinner"] {
-        color: #64748b;
+        color: #a0a0a0;
     }
 
     /* Divider */
     hr {
         border: none;
-        border-top: 1px solid #f1f5f9;
+        border-top: 1px solid #222222;
+    }
+
+    /* File uploader label */
+    .stFileUploader label {
+        color: #a0a0a0 !important;
+    }
+
+    /* Input fields */
+    .stTextInput > div > div > input,
+    .stTextArea > div > div > textarea {
+        background-color: #141414 !important;
+        border: 1px solid #333333 !important;
+        color: #f5f5f5 !important;
+    }
+
+    /* Selectbox */
+    .stSelectbox > div > div {
+        background-color: #141414 !important;
+        border: 1px solid #333333 !important;
+        color: #f5f5f5 !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -185,11 +205,11 @@ def main():
         align-items: center;
         gap: 8px;
         padding: 6px 12px;
-        background: #f0fdf4;
-        border: 1px solid #bbf7d0;
+        background: #0d2818;
+        border: 1px solid #166534;
         border-radius: 6px;
         font-size: 0.85rem;
-        color: #166534;
+        color: #4ade80;
     ">
         <span style="width: 7px; height: 7px; background: #22c55e; border-radius: 50%; display: inline-block;"></span>
         Mistral OCR sẵn sàng &middot; {pool.size} key
@@ -211,15 +231,15 @@ def main():
             align-items: center;
             gap: 12px;
             padding: 14px 16px;
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
+            background: #141414;
+            border: 1px solid #333333;
             border-radius: 10px;
             margin-bottom: 1rem;
         ">
             <div style="
                 width: 40px;
                 height: 40px;
-                background: #f1f5f9;
+                background: #1a1a1a;
                 border-radius: 10px;
                 display: flex;
                 align-items: center;
@@ -227,8 +247,8 @@ def main():
                 font-size: 1.1rem;
             ">📄</div>
             <div>
-                <div style="font-weight: 500; color: #1e293b; font-size: 0.9rem;">{uploaded_file.name}</div>
-                <div style="font-size: 0.8rem; color: #94a3b8;">Đang xử lý...</div>
+                <div style="font-weight: 500; color: #f5f5f5; font-size: 0.9rem;">{uploaded_file.name}</div>
+                <div style="font-size: 0.8rem; color: #666666;">Đang xử lý...</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -249,13 +269,13 @@ def main():
             st.markdown("""
             <div style="
                 padding: 1rem 1.25rem;
-                background: #f0fdf4;
-                border: 1px solid #bbf7d0;
+                background: #0d2818;
+                border: 1px solid #166534;
                 border-radius: 10px;
                 margin-bottom: 1rem;
             ">
-                <div style="font-weight: 600; color: #166534; font-size: 0.9rem;">Trích xuất thành công</div>
-                <div style="font-size: 0.85rem; color: #15803d; margin-top: 2px;">File Word đã sẵn sàng tải xuống.</div>
+                <div style="font-weight: 600; color: #4ade80; font-size: 0.9rem;">Trích xuất thành công</div>
+                <div style="font-size: 0.85rem; color: #22c55e; margin-top: 2px;">File Word đã sẵn sàng tải xuống.</div>
             </div>
             """, unsafe_allow_html=True)
 
@@ -269,12 +289,12 @@ def main():
             st.markdown("""
             <div style="
                 padding: 1rem 1.25rem;
-                background: #fef2f2;
-                border: 1px solid #fecaca;
+                background: #2d1215;
+                border: 1px solid #991b1b;
                 border-radius: 10px;
             ">
-                <div style="font-weight: 600; color: #991b1b; font-size: 0.9rem;">Không trích xuất được</div>
-                <div style="font-size: 0.85rem; color: #b91c1c; margin-top: 2px;">Vui lòng thử lại với file khác hoặc kiểm tra chất lượng ảnh.</div>
+                <div style="font-weight: 600; color: #f87171; font-size: 0.9rem;">Không trích xuất được</div>
+                <div style="font-size: 0.85rem; color: #ef4444; margin-top: 2px;">Vui lòng thử lại với file khác hoặc kiểm tra chất lượng ảnh.</div>
             </div>
             """, unsafe_allow_html=True)
 
