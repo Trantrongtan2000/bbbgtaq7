@@ -59,7 +59,7 @@ def check_prerequisites() -> bool:
 
 def main():
     st.set_page_config(
-        page_title="Bien ban Ban giao",
+        page_title="Biên bản Bàn giao",
         page_icon="📄",
         layout="centered"
     )
@@ -146,12 +146,12 @@ def main():
     </style>
     """, unsafe_allow_html=True)
 
-    st.title("Bien ban Ban giao")
+    st.title("Biên bản Bàn giao")
 
     st.markdown("""
     <div style="max-width: 480px;">
         <p style="font-size: 1rem; color: #64748b; margin-bottom: 0;">
-            Tai len file PDF hoac anh tu Bien ban ban giao de tao file Word tu dong.
+            Tải lên file PDF hoặc ảnh từ Biên bản bàn giao để tạo file Word tự động.
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -179,16 +179,16 @@ def main():
             border-radius: 50%;
             display: inline-block;
         "></span>
-        Mistral OCR san sang &middot; {pool.size} key
+        Mistral OCR sẵn sàng &middot; {pool.size} key
     </div>
     """, unsafe_allow_html=True)
 
     st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
 
     uploaded_file = st.file_uploader(
-        "Chon file",
+        "Chọn file",
         type=["pdf", "jpg", "png"],
-        help="Ho tro dinh dang PDF, PNG, JPG"
+        help="Hỗ trợ định dạng PDF, PNG, JPG"
     )
 
     if uploaded_file:
@@ -218,13 +218,13 @@ def main():
                     {uploaded_file.name}
                 </div>
                 <div style="font-size: 0.8rem; color: #94a3b8; font-family: 'JetBrains Mono', monospace;">
-                    Dang xu ly...
+                    Đang xử lý...
                 </div>
             </div>
         </div>
         """, unsafe_allow_html=True)
 
-        with st.spinner("Dang trich xuat du lieu..."):
+        with st.spinner("Đang trích xuất dữ liệu..."):
             file_bytes = uploaded_file.getvalue()
             mime = 'application/pdf' if uploaded_file.name.lower().endswith('.pdf') else 'image/jpeg'
             data = extract_from_image(file_bytes, mime, PROMPT_TEMPLATE)
@@ -246,16 +246,16 @@ def main():
                 margin-bottom: 1rem;
             ">
                 <div style="font-weight: 600; color: #166534; font-size: 0.95rem; margin-bottom: 4px;">
-                    Trich xuat thanh cong
+                    Trích xuất thành công
                 </div>
                 <div style="font-size: 0.85rem; color: #15803d;">
-                    File Word da san sang tai xuong.
+                    File Word đã sẵn sàng tải xuống.
                 </div>
             </div>
             """, unsafe_allow_html=True)
 
             st.download_button(
-                "Tai file Word",
+                "Tải file Word",
                 word_io,
                 filename,
                 "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -269,10 +269,10 @@ def main():
                 border-radius: 12px;
             ">
                 <div style="font-weight: 600; color: #991b1b; font-size: 0.95rem; margin-bottom: 4px;">
-                    Khong trich xuat duoc
+                    Không trích xuất được
                 </div>
                 <div style="font-size: 0.85rem; color: #b91c1c;">
-                    Vui long thu lai voi file khac hoac kiem tra chat luong anh.
+                    Vui lòng thử lại với file khác hoặc kiểm tra chất lượng ảnh.
                 </div>
             </div>
             """, unsafe_allow_html=True)
