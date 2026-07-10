@@ -31,6 +31,14 @@ def _collect_keys() -> list[str]:
         if env_key and env_key not in keys:
             keys.append(env_key)
 
+    # 2b. MISTRAL_KEYS (semicolon separated list)
+    mistral_keys_env = os.environ.get('MISTRAL_KEYS')
+    if mistral_keys_env:
+        for k in mistral_keys_env.split(';'):
+            k_clean = k.strip()
+            if k_clean and k_clean not in keys:
+                keys.append(k_clean)
+
     # 3. config.ini
     if os.path.exists(CONFIG_FILE_PATH):
         try:
