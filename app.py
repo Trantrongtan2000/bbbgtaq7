@@ -7,7 +7,7 @@ from config.api_keys import pool
 from core.models import HandoverData
 from core.group import group_devices
 from core.filename import generate_filename
-from core.extractor import extract_from_image
+from core.extractor import extract_from_image, extract_text_from_pdf
 from template.filler import fill_word_template
 
 logger = get_logger('ui')
@@ -252,6 +252,28 @@ def main():
             </div>
         </div>
         """, unsafe_allow_html=True)
+
+        # Check PDF type (digital/searchable vs scanned) to inform the user
+        is_digital_pdf = False
+        num_pages = 0
+        if uploaded_file.name.lower().endswith('.pdf'):
+            try:
+                pdf_text = extract_text_from_pdf(uploaded_file.getvalue())
+                if pdf_text:
+                    is_digital_pdf = True
+            except Exception:
+                pass
+            try:
+                import fitz
+                doc = fitz.open(stream=uploaded_file.getvalue(), filetype="pdf")
+                num_pages = len(doc)
+            except Exception:
+                pass
+
+        if is_digital_pdf:
+            st.info(f"Đã phát hiện văn bản trong PDF ({num_pages} trang). Bắt đầu trích xuất trực tiếp...")
+        elif uploaded_file.name.lower().endswith('.pdf'):
+            st.info(f"Không phát hiện văn bản trực tiếp. Đang chuyển đổi PDF ({num_pages} trang) sang ảnh và chạy Mistral OCR...")
 
         with st.spinner("Đang trích xuất dữ liệu..."):
             file_bytes = uploaded_file.getvalue()
