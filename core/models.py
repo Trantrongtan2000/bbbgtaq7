@@ -9,6 +9,7 @@ class Device:
     """Represents a single device in the handover document."""
     ttb: str = ""          # Tên thiết bị
     model: str = ""
+    ref: str = ""          # Số REF
     hang: str = ""         # Hãng
     nsx: str = ""          # Nước sản xuất
     dvt: str = ""          # Đơn vị tính
@@ -18,7 +19,7 @@ class Device:
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            'ttb': self.ttb, 'model': self.model, 'hang': self.hang,
+            'ttb': self.ttb, 'model': self.model, 'ref': self.ref, 'hang': self.hang,
             'nsx': self.nsx, 'dvt': self.dvt, 'sl': self.sl,
             'seri': self.seri, 'pk': self.pk,
         }
@@ -42,6 +43,7 @@ class Device:
         return cls(
             ttb=str(data.get('ttb', '')).strip(),
             model=str(data.get('model', '')).strip(),
+            ref=str(data.get('ref', '')).strip(),
             hang=str(data.get('hang', '')).strip(),
             nsx=str(data.get('nsx', '')).strip(),
             dvt=str(data.get('dvt', '')).strip(),
@@ -74,6 +76,7 @@ class GroupedDevice:
     """Grouped device for Word template output."""
     ttb: str
     model: str
+    ref: str
     hang: str
     nsx: str
     dvt: str
@@ -83,7 +86,7 @@ class GroupedDevice:
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            'ttb': self.ttb, 'model': self.model, 'hang': self.hang,
+            'ttb': self.ttb, 'model': self.model, 'ref': self.ref, 'hang': self.hang,
             'nsx': self.nsx, 'dvt': self.dvt, 'sl': self.sl,
             'pk': self.pk, 'seri_text': self.seri_text,
         }

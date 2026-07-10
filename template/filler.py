@@ -59,13 +59,20 @@ def fill_word_template(
 
         for count, item in enumerate(grouped_devices, 1):
             pk_text = format_accessories_list(item.pk)
-            device_info = (
-                f"{item.ttb.strip()}\n"
-                f"- Model: {item.model.strip()}\n"
-                f"- Hãng: {item.hang.strip()}\n"
-                f"- NSX: {item.nsx.strip()}"
-                f"{pk_text}"
-            )
+            info_parts = [item.ttb.strip()]
+            if item.model.strip():
+                info_parts.append(f"- Model: {item.model.strip()}")
+            if item.ref.strip():
+                info_parts.append(f"- REF: {item.ref.strip()}")
+            if item.hang.strip():
+                info_parts.append(f"- Hãng: {item.hang.strip()}")
+            if item.nsx.strip():
+                info_parts.append(f"- NSX: {item.nsx.strip()}")
+            if pk_text:
+                # Add accessories block
+                info_parts.append(pk_text.strip())
+
+            device_info = "\n".join(info_parts)
 
             new_row = table.add_row()
             row_data = [

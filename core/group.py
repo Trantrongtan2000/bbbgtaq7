@@ -34,6 +34,7 @@ def _make_group_key(device: Device) -> tuple:
     return (
         standardize_string(getattr(device, 'ttb', '')),
         getattr(device, 'model', ''),
+        getattr(device, 'ref', ''),
         getattr(device, 'hang', ''),
         getattr(device, 'nsx', ''),
         getattr(device, 'dvt', ''),
@@ -42,7 +43,7 @@ def _make_group_key(device: Device) -> tuple:
 
 
 def group_devices(devices: List[Device]) -> List[GroupedDevice]:
-    """Group identical devices by (ttb, model, hang, nsx, dvt, pk).
+    """Group identical devices by (ttb, model, ref, hang, nsx, dvt, pk).
 
     Merges quantities and collects unique serial numbers.
     """
@@ -55,6 +56,7 @@ def group_devices(devices: List[Device]) -> List[GroupedDevice]:
             grouped[group_key] = {
                 'ttb': device.ttb,
                 'model': device.model,
+                'ref': device.ref,
                 'hang': device.hang,
                 'nsx': device.nsx,
                 'dvt': device.dvt,
@@ -68,7 +70,7 @@ def group_devices(devices: List[Device]) -> List[GroupedDevice]:
 
     return [
         GroupedDevice(
-            ttb=gd['ttb'], model=gd['model'], hang=gd['hang'],
+            ttb=gd['ttb'], model=gd['model'], ref=gd['ref'], hang=gd['hang'],
             nsx=gd['nsx'], dvt=gd['dvt'], sl=gd['total_sl'],
             pk=gd['pk_raw'], seri_text=_format_seri(gd['seri']),
         )
