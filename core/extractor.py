@@ -152,7 +152,8 @@ def extract_from_image(
             quota_errors = [
                 "API_KEY", "UNAUTHORIZED", "INVALID", "QUOTA", "LIMIT",
                 "429", "RESOURCE_EXHAUSTED", "RATE_LIMIT", "PERMISSION_DENIED",
-                "402", "SUBSCRIPTION", "PAYMENT", "502", "503", "TEMPORARILY UNAVAILABLE",
+                "402", "SUBSCRIPTION", "PAYMENT", "500", "502", "503", "504",
+                "TEMPORARILY UNAVAILABLE", "SERVICE UNAVAILABLE", "TIMEOUT", "GATEWAY",
             ]
             if any(x in last_error.upper() for x in quota_errors):
                 logger.warning("Quota/subscription/transient server error, rotating to next key...")
