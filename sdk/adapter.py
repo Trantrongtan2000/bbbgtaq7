@@ -4,7 +4,7 @@ import json
 import base64
 import time
 from typing import Optional, Dict, Any, List
-from mistralai.client import Mistral
+from mistralai import Mistral
 from config.api_keys import pool
 from utils.logging_setup import get_logger
 

@@ -13,7 +13,19 @@ def _collect_keys() -> list[str]:
     """Collect all available API keys from all sources."""
     keys = []
 
-    # 1. Streamlit secrets
+    # 1. config.ini (Priority)
+    if os.path.exists(CONFIG_FILE_PATH):
+        try:
+            import configparser
+            config = configparser.ConfigParser()
+            config.read(CONFIG_FILE_PATH, encoding='utf-8')
+            key = config['API']['MISTRAL_API_KEY']
+            if key and key != 'YOUR_API_KEY_HERE' and key not in keys:
+                keys.append(key)
+        except Exception:
+            pass
+
+    # 2. Streamlit secrets
     try:
         import streamlit as st
         if hasattr(st, 'secrets'):
@@ -25,31 +37,19 @@ def _collect_keys() -> list[str]:
     except Exception:
         pass
 
-    # 2. Environment variables
+    # 3. Environment variables
     for suffix in ['', '_2', '_3', '_4', '_5', '_6', '_7', '_8', '_9']:
         env_key = os.environ.get(f'MISTRAL_API_KEY{suffix}')
         if env_key and env_key not in keys:
             keys.append(env_key)
 
-    # 2b. MISTRAL_KEYS (semicolon separated list)
+    # 3b. MISTRAL_KEYS (semicolon separated list)
     mistral_keys_env = os.environ.get('MISTRAL_KEYS')
     if mistral_keys_env:
         for k in mistral_keys_env.split(';'):
             k_clean = k.strip()
             if k_clean and k_clean not in keys:
                 keys.append(k_clean)
-
-    # 3. config.ini
-    if os.path.exists(CONFIG_FILE_PATH):
-        try:
-            import configparser
-            config = configparser.ConfigParser()
-            config.read(CONFIG_FILE_PATH)
-            key = config['API']['MISTRAL_API_KEY']
-            if key and key != 'YOUR_API_KEY_HERE' and key not in keys:
-                keys.append(key)
-        except Exception:
-            pass
 
     return keys
 
