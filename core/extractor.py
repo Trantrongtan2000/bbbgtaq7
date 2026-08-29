@@ -150,11 +150,12 @@ def extract_from_image(
             logger.warning(f"Attempt {attempt + 1} failed: {type(e).__name__}: {last_error}")
 
             quota_errors = [
-                "API_KEY", "UNAUTHORIZED", "INVALID", "quota", "limit",
-                "429", "RESOURCE_EXHAUSTED", "rate_limit", "PERMISSION_DENIED",
+                "API_KEY", "UNAUTHORIZED", "INVALID", "QUOTA", "LIMIT",
+                "429", "RESOURCE_EXHAUSTED", "RATE_LIMIT", "PERMISSION_DENIED",
+                "402", "SUBSCRIPTION", "PAYMENT", "502", "503", "TEMPORARILY UNAVAILABLE",
             ]
             if any(x in last_error.upper() for x in quota_errors):
-                logger.warning("Quota/key error, rotating to next key...")
+                logger.warning("Quota/subscription/transient server error, rotating to next key...")
                 pool.rotate()
                 time.sleep(0.5)
                 continue
