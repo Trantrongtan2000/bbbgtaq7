@@ -4,28 +4,24 @@ import re
 from typing import Any
 
 
+import unicodedata
+
+
 def standardize_string(text: Any) -> str:
-    """Normalize Vietnamese diacritics to ASCII-safe equivalents."""
+    """Normalize Vietnamese diacritics to ASCII-safe lowercase equivalents."""
     if not isinstance(text, str):
-        return str(text)
+        text = str(text) if text is not None else ""
 
-    replacements = [
-        ('ÀÂẮẶẲẴ', 'AAAAA'), ('ÈÉẸẺẼ', 'EEEEE'), ('ỀẾỆỂỄ', 'EEEEE'),
-        ('ÌÍỊỈĨ', 'IIIII'), ('ÒÓỌỎÕ', 'OOOOO'), ('ỒỐỘỔỖ', 'OOOOO'),
-        ('ỜỚỢỞỠ', 'OOOOO'), ('ÙÚỤỦŨ', 'UUUUU'), ('ỪỨỰỬỮ', 'UUUUU'),
-        ('ỲÝỴỶỸ', 'YYYYY'), ('Đ', 'D'),
-    ]
-    for src, dst in replacements:
-        for s, d in zip(src, dst):
-            text = text.replace(s, d)
-
-    text = text.lower().replace('-', ' ').strip()
-    return re.sub(r'\s+', ' ', text).strip()
+    text = text.replace('Đ', 'D').replace('đ', 'd')
+    normalized = unicodedata.normalize('NFD', text)
+    stripped = ''.join(c for c in normalized if unicodedata.category(c) != 'Mn')
+    stripped = stripped.lower().replace('-', ' ').strip()
+    return re.sub(r'\s+', ' ', stripped).strip()
 
 
 def clean_filename(filename: str, max_len: int = 200) -> str:
-    """Remove filesystem-illegal characters from filename."""
-    chars_to_remove = r'[\\/*?":<>|.]'
+    """Remove filesystem-illegal characters from filename, preserving valid dots."""
+    chars_to_remove = r'[\\/*?":<>|]'
     cleaned = re.sub(chars_to_remove, '', filename)
     return cleaned[:max_len] if len(cleaned) > max_len else cleaned
 

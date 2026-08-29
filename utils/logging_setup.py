@@ -30,28 +30,28 @@ def setup_logging():
     except OSError:
         pass
 
-    timestamp = datetime.now().strftime('%Y-%m-%d-%H%M%S')
-    _log_file = os.path.join(LOG_DIR, f'fix-{timestamp}.log')
+    _log_file = os.path.join(LOG_DIR, 'app.log')
 
     logger = logging.getLogger('bbbg')
     logger.setLevel(logging.DEBUG)
 
-    console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.INFO)
-    console_handler.setFormatter(
-        logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-    )
+    if not logger.handlers:
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(logging.INFO)
+        console_handler.setFormatter(
+            logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+        )
 
-    file_handler = RotatingFileHandler(
-        _log_file, maxBytes=5*1024*1024, backupCount=3, encoding='utf-8'
-    )
-    file_handler.setLevel(logging.DEBUG)
-    file_handler.setFormatter(
-        logging.Formatter('[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s')
-    )
+        file_handler = RotatingFileHandler(
+            _log_file, maxBytes=5*1024*1024, backupCount=3, encoding='utf-8'
+        )
+        file_handler.setLevel(logging.DEBUG)
+        file_handler.setFormatter(
+            logging.Formatter('[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s')
+        )
 
-    logger.addHandler(console_handler)
-    logger.addHandler(file_handler)
+        logger.addHandler(console_handler)
+        logger.addHandler(file_handler)
 
     return _log_file
 

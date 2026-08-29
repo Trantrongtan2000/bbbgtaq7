@@ -76,6 +76,7 @@ def extract_from_image(
     file_bytes: bytes,
     mime_type: str,
     prompt: str,
+    pre_extracted_text: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """Two-step extraction: PDF text extraction (or PDF page-by-page image OCR) -> chat model JSON parsing.
 
@@ -85,9 +86,9 @@ def extract_from_image(
     last_error = None
 
     # Step 0: Try direct PDF text extraction if it's a PDF
-    ocr_text = ""
+    ocr_text = pre_extracted_text or ""
     pdf_images = []
-    if mime_type == 'application/pdf':
+    if mime_type == 'application/pdf' and not ocr_text:
         try:
             ocr_text = extract_text_from_pdf(file_bytes)
         except Exception as e:

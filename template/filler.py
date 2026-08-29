@@ -41,6 +41,18 @@ def format_accessories_list(pk_raw: Any) -> str:
     return "\n- Phụ kiện:\n" + "\n".join(formatted) if formatted else ""
 
 
+def format_quantity(sl: float) -> str:
+    """Format quantity: 1.0 -> '1', 1.5 -> '1.5', 0 -> '0'."""
+    try:
+        val = float(sl)
+        if val.is_integer():
+            return str(int(val))
+        formatted = f"{val:.4f}".rstrip('0').rstrip('.')
+        return formatted if formatted else "0"
+    except (ValueError, TypeError):
+        return str(sl) if sl is not None else "0"
+
+
 def fill_word_template(
     data: Dict[str, Any],
     grouped_devices: List[GroupedDevice],
@@ -79,7 +91,7 @@ def fill_word_template(
                 str(count),
                 device_info,
                 item.dvt.strip(),
-                str(int(item.sl)),
+                format_quantity(item.sl),
                 item.seri_text,
             ]
 
@@ -111,18 +123,22 @@ def fill_word_template(
         else:
             shd_replacement = f"Dựa theo số: {shd_value}"
 
-    shd_pattern = re.compile(re.escape("shd"), re.IGNORECASE)
+    shd_pattern = re.compile(r'\bshd\b|\{\{shd\}\}', re.IGNORECASE)
+    day_pattern = re.compile(r'\bday\b|\{\{day\}\}', re.IGNORECASE)
+    month_pattern = re.compile(r'\bmonth\b|\{\{month\}\}', re.IGNORECASE)
+    year_pattern = re.compile(r'\byear\b|\{\{year\}\}', re.IGNORECASE)
 
     for para in document.paragraphs:
         for run in para.runs:
-            if "day" in run.text:
-                run.text = run.text.replace("day", str(now.day))
-            if "month" in run.text:
-                run.text = run.text.replace("month", str(now.month))
-            if "year" in run.text:
-                run.text = run.text.replace("year", str(now.year))
-            if shd_pattern.search(run.text):
-                run.text = shd_pattern.sub(shd_replacement, run.text)
+            if run.text:
+                if day_pattern.search(run.text):
+                    run.text = day_pattern.sub(str(now.day), run.text)
+                if month_pattern.search(run.text):
+                    run.text = month_pattern.sub(str(now.month), run.text)
+                if year_pattern.search(run.text):
+                    run.text = year_pattern.sub(str(now.year), run.text)
+                if shd_pattern.search(run.text):
+                    run.text = shd_pattern.sub(shd_replacement, run.text)
 
     byte_io = BytesIO()
     document.save(byte_io)

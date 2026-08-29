@@ -33,12 +33,19 @@ class Device:
             sl = 0
 
         seri_raw = data.get('seri', []) or []
-        if isinstance(seri_raw, str):
-            seri = [seri_raw] if seri_raw else []
-        elif isinstance(seri_raw, list):
-            seri = [str(s).strip() for s in seri_raw if s and str(s).strip()]
-        else:
-            seri = []
+        seri = []
+        if isinstance(seri_raw, (list, tuple, set)):
+            for s in seri_raw:
+                if s is not None:
+                    cleaned_s = str(s).strip()
+                    if cleaned_s:
+                        seri.append(cleaned_s)
+        elif isinstance(seri_raw, str):
+            cleaned_str = seri_raw.strip()
+            if cleaned_str:
+                import re
+                parts = re.split(r'[,;\n\r\t]+', cleaned_str)
+                seri = [p.strip() for p in parts if p.strip()]
 
         return cls(
             ttb=str(data.get('ttb', '')).strip(),

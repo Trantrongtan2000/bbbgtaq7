@@ -8,36 +8,56 @@ from utils.text import standardize_string
 MAX_SERI_DISPLAY = 100
 
 
-def _make_pk_key(pk: Any) -> str:
-    """Create a hashable key from accessories list.
+def _normalize_group_value(val: Any) -> str:
+    """Normalize string value for grouping key: strip, lower, None-safe."""
+    if val is None:
+        return ""
+    return str(val).strip().lower()
 
-    Returns a string key for grouping. Handles None, empty lists,
-    and serialization failures gracefully.
+
+def _make_pk_key(pk: Any) -> str:
+    """Create a canonicalized hashable key from accessories list.
+
+    Strips each item, ignores casing and whitespace, removes empty items,
+    and sorts the items before serialization.
     """
     if pk is None:
         return "None"
     if isinstance(pk, list):
-        if not pk:
-            return "[]"
+        normalized_items = []
+        for item in pk:
+            if item is None:
+                continue
+            if isinstance(item, str):
+                s = item.strip()
+                if s:
+                    normalized_items.append(s.lower())
+            elif isinstance(item, (dict, list)):
+                try:
+                    normalized_items.append(json.dumps(item, ensure_ascii=False, sort_keys=True).lower())
+                except Exception:
+                    normalized_items.append(str(item).strip().lower())
+            else:
+                s = str(item).strip()
+                if s:
+                    normalized_items.append(s.lower())
+        normalized_items.sort()
         try:
-            return json.dumps(pk, ensure_ascii=False, sort_keys=True)
+            return json.dumps(normalized_items, ensure_ascii=False)
         except (TypeError, ValueError):
-            return str(pk)
-    return str(pk).strip() or "None"
+            return str(normalized_items)
+    return str(pk).strip().lower() or "None"
 
 
 def _make_group_key(device: Device) -> tuple:
-    """Create a grouping key from device attributes.
-
-    Uses getattr for safety in case Device structure changes.
-    """
+    """Create a grouping key from device attributes."""
     return (
         standardize_string(getattr(device, 'ttb', '')),
-        getattr(device, 'model', ''),
-        getattr(device, 'ref', ''),
-        getattr(device, 'hang', ''),
-        getattr(device, 'nsx', ''),
-        getattr(device, 'dvt', ''),
+        _normalize_group_value(getattr(device, 'model', '')),
+        _normalize_group_value(getattr(device, 'ref', '')),
+        _normalize_group_value(getattr(device, 'hang', '')),
+        _normalize_group_value(getattr(device, 'nsx', '')),
+        _normalize_group_value(getattr(device, 'dvt', '')),
         _make_pk_key(getattr(device, 'pk', None)),
     )
 

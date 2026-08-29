@@ -11,16 +11,70 @@ from utils.logging_setup import get_logger
 logger = get_logger('sdk.adapter')
 
 
+import re
+
+
 def _parse_json_response(text: str) -> Optional[Dict[str, Any]]:
-    """Strip markdown code fences and parse JSON."""
-    text = text.strip()
-    if text.startswith("```json"):
-        text = text[7:]
-    elif text.startswith("```"):
-        text = text[3:]
-    if text.endswith("```"):
-        text = text[:-3]
-    return json.loads(text.strip())
+    """Parse JSON from model response supporting markdown code fences, raw JSON, and leading/trailing text."""
+    if not text or not isinstance(text, str):
+        return None
+
+    cleaned = text.strip()
+
+    # 1. Check for markdown code fences (```json ... ``` or ``` ...)
+    fence_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', cleaned, re.IGNORECASE)
+    if fence_match:
+        candidate = fence_match.group(1).strip()
+        try:
+            return json.loads(candidate)
+        except Exception:
+            cleaned = candidate
+
+    # 2. Try direct json.loads on cleaned string
+    try:
+        return json.loads(cleaned)
+    except Exception:
+        pass
+
+    # 3. Locate the first '{' and find the matching balanced '}'
+    start_idx = cleaned.find('{')
+    if start_idx != -1:
+        depth = 0
+        in_string = False
+        escape = False
+        for idx in range(start_idx, len(cleaned)):
+            char = cleaned[idx]
+            if escape:
+                escape = False
+                continue
+            if char == '\\':
+                escape = True
+                continue
+            if char == '"':
+                in_string = not in_string
+                continue
+            if not in_string:
+                if char == '{':
+                    depth += 1
+                elif char == '}':
+                    depth -= 1
+                    if depth == 0:
+                        candidate = cleaned[start_idx:idx + 1]
+                        try:
+                            return json.loads(candidate)
+                        except Exception:
+                            break
+
+    # 4. Fallback search for any outermost JSON object
+    last_brace = cleaned.rfind('}')
+    if start_idx != -1 and last_brace != -1 and last_brace > start_idx:
+        try:
+            return json.loads(cleaned[start_idx:last_brace + 1])
+        except Exception as e:
+            logger.warning(f"Failed to parse JSON substring: {e}")
+
+    logger.warning("Could not extract valid JSON from response.")
+    return None
 
 
 class MistralAdapter:
@@ -84,70 +138,3 @@ class MistralAdapter:
             logger.error(f"Chat extraction failed: {type(e).__name__}: {e}")
             raise
 
-
-def extract_from_image(
-    file_bytes: bytes,
-    mime_type: str,
-    prompt: str,
-) -> Optional[Dict[str, Any]]:
-    """Two-step extraction: OCR → JSON parsing via Mistral.
-
-    Tries multiple API keys on failure.
-    """
-    system_instruction = (
-        "Bạn là một nhà phân tích tài liệu kỹ thuật. Nhiệm vụ của bạn là trích xuất thông tin từ 'Biên bản bàn giao' "
-        "vào định dạng JSON. "
-        "QUAN TRỌNG: Trường 'pk' (Phụ kiện) phải là một danh sách (Array) các chuỗi, không được gộp thành 1 chuỗi dài. "
-        "Nếu không có thông tin, trả về null. Không thêm Markdown (```json)."
-    )
-
-    last_error = None
-
-    for attempt in range(pool.size):
-        api_key = pool.get_current()
-        if not api_key:
-            break
-
-        adapter = MistralAdapter(api_key)
-        if not adapter.is_available:
-            pool.rotate()
-            continue
-
-        try:
-            # Step 1: OCR
-            ocr_text = adapter.ocr_document(file_bytes, mime_type)
-            if not ocr_text:
-                pool.rotate()
-                continue
-
-            # Step 2: Chat extraction
-            text = adapter.chat_extract(ocr_text, prompt, system_instruction)
-            if not text:
-                pool.rotate()
-                continue
-
-            data = _parse_json_response(text)
-            if data:
-                logger.info(f"Successfully extracted data with key index {pool._index}")
-                return data
-
-        except Exception as e:
-            last_error = str(e)
-            logger.warning(f"Attempt {attempt + 1} failed: {type(e).__name__}: {last_error}")
-
-            quota_errors = [
-                "API_KEY", "UNAUTHORIZED", "INVALID", "quota", "limit",
-                "429", "RESOURCE_EXHAUSTED", "rate_limit", "PERMISSION_DENIED",
-            ]
-            if any(x in last_error.upper() for x in quota_errors):
-                logger.warning("Quota/key error, rotating to next key...")
-                pool.rotate()
-                time.sleep(0.5)
-                continue
-
-            pool.rotate()
-            continue
-
-    if last_error:
-        logger.error(f"All keys failed: {last_error}")
-    return None
