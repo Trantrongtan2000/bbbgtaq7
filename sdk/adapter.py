@@ -124,17 +124,33 @@ class MistralAdapter:
         prompt: str,
         system_instruction: str,
     ) -> Optional[str]:
-        """Send OCR text to Mistral chat for structured extraction."""
-        try:
-            response = self._client.chat.complete(
-                model="mistral-large-latest",
-                messages=[
-                    {"role": "system", "content": system_instruction},
-                    {"role": "user", "content": f"{prompt}\n\n---\nNội dung OCR:\n{ocr_text}"},
-                ],
-            )
-            return response.choices[0].message.content.strip()
-        except Exception as e:
-            logger.error(f"Chat extraction failed: {type(e).__name__}: {e}")
-            raise
+        """Send OCR text to Mistral chat for structured extraction with retry & model fallback."""
+        models_to_try = ["mistral-small-latest", "mistral-large-latest", "ministral-8b-latest"]
+        last_err = None
+
+        for model_name in models_to_try:
+            for retry in range(2):
+                try:
+                    response = self._client.chat.complete(
+                        model=model_name,
+                        messages=[
+                            {"role": "system", "content": system_instruction},
+                            {"role": "user", "content": f"{prompt}\n\n---\nNội dung OCR:\n{ocr_text}"},
+                        ],
+                    )
+                    content = response.choices[0].message.content
+                    if content:
+                        logger.info(f"Chat extraction succeeded with model: {model_name}")
+                        return content.strip()
+                except Exception as e:
+                    last_err = e
+                    err_str = str(e).upper()
+                    logger.warning(f"Model {model_name} attempt {retry+1} failed: {type(e).__name__}: {e}")
+                    if any(code in err_str for code in ["500", "502", "503", "504", "TIMEOUT", "UNAVAILABLE", "HIGH LOAD", "429"]):
+                        time.sleep(1.0)
+                        continue
+                    break
+
+        logger.error(f"Chat extraction failed across models: {last_err}")
+        raise last_err
 
